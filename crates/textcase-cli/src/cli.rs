@@ -34,7 +34,7 @@ pub enum LexiconCommand {
         #[arg(value_enum)]
         source: SourceId,
     },
-    /// Fetch source data from a real upstream source, or use `--sample` for deterministic fixtures.
+    /// Fetch source data from a production upstream source.
     Fetch(FetchArgs),
     /// Convert raw source input into a prepared lexicon file.
     Prepare(PrepareArgs),
@@ -84,7 +84,7 @@ pub struct FetchArgs {
     pub region: Option<String>,
     #[arg(long)]
     pub url: Option<String>,
-    #[arg(long)]
+    #[arg(long, hide = true)]
     pub sample: bool,
     #[arg(long, default_value = "data/raw")]
     pub output_dir: PathBuf,

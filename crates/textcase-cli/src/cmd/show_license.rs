@@ -1,4 +1,4 @@
-use crate::sources::{SourceId, descriptor};
+use crate::sources::{SourceId, descriptor, fetch_guidance};
 
 pub fn run(source: SourceId) -> Result<String, Box<dyn std::error::Error>> {
     let descriptor = descriptor(source);
@@ -11,9 +11,10 @@ license: {license_name}
 summary: {summary}
 plugin kinds: {plugin_kinds}
 acknowledgement: {ack}
+fetch guidance: {fetch}
 recommendation: {recommendation}
 bundling policy: {bundling}
-docs anchor: {anchor}",
+setup guide: docs/sources.md{anchor}",
         name = descriptor.display_name,
         id = descriptor.id,
         class = descriptor.class,
@@ -26,6 +27,7 @@ docs anchor: {anchor}",
             .collect::<Vec<_>>()
             .join(", "),
         ack = acknowledgement,
+        fetch = fetch_guidance(source),
         recommendation = if descriptor.recommended {
             "recommended"
         } else {

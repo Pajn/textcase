@@ -3,7 +3,6 @@ mod geonames;
 mod getty;
 mod gnd;
 mod musicbrainz;
-mod omw;
 mod openstreetmap;
 mod orcid;
 mod ud_german_gsd;
@@ -14,7 +13,6 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use clap::ValueEnum;
-use serde_json::Value;
 use textcase::lexicon::{PreparedKind, PreparedLexicon, PreparedPayload};
 use textcase::plugin::{LicenseMetadata, SourceMetadata};
 
@@ -36,7 +34,6 @@ pub enum SourceId {
     Wiktionary,
     Dbpedia,
     Openstreetmap,
-    Omw,
 }
 
 impl fmt::Display for SourceId {
@@ -52,7 +49,6 @@ impl fmt::Display for SourceId {
             SourceId::Wiktionary => "wiktionary",
             SourceId::Dbpedia => "dbpedia",
             SourceId::Openstreetmap => "openstreetmap",
-            SourceId::Omw => "omw",
         };
         write!(f, "{value}")
     }
@@ -63,7 +59,6 @@ pub enum SourceClass {
     Green,
     Yellow,
     Orange,
-    Gray,
 }
 
 impl fmt::Display for SourceClass {
@@ -72,7 +67,6 @@ impl fmt::Display for SourceClass {
             SourceClass::Green => "green",
             SourceClass::Yellow => "yellow",
             SourceClass::Orange => "orange",
-            SourceClass::Gray => "gray",
         };
         write!(f, "{value}")
     }
@@ -127,7 +121,6 @@ const WIKTIONARY_KINDS: &[PreparedKind] = &[PreparedKind::WordSet, PreparedKind:
 const DBPEDIA_KINDS: &[PreparedKind] = &[PreparedKind::CanonicalMap, PreparedKind::MultiwordMap];
 const OPENSTREETMAP_KINDS: &[PreparedKind] =
     &[PreparedKind::CanonicalMap, PreparedKind::MultiwordMap];
-const OMW_KINDS: &[PreparedKind] = &[PreparedKind::WordSet, PreparedKind::RankedCandidates];
 
 const DESCRIPTORS: &[SourceDescriptor] = &[
     SourceDescriptor {
@@ -270,20 +263,6 @@ const DESCRIPTORS: &[SourceDescriptor] = &[
         purpose: "local places, roads, and locality names",
         bundling_policy: "optional end-user plugin only",
     },
-    SourceDescriptor {
-        id: SourceId::Omw,
-        display_name: "Open Multilingual Wordnet",
-        class: SourceClass::Gray,
-        license_name: "open / mixed practical value",
-        license_summary: "experimental lexical hints source",
-        acknowledgement_flag: None,
-        recommended: false,
-        plugin_kinds: OMW_KINDS,
-        domain_tags: &["lexical", "experimental"],
-        docs_anchor: "#omw",
-        purpose: "lexical hints and semantic groupings",
-        bundling_policy: "experimental external plugin only",
-    },
 ];
 
 pub fn descriptors() -> &'static [SourceDescriptor] {
@@ -322,6 +301,7 @@ pub fn suggested_output_name(source: SourceId, suffix: &str) -> String {
     let extension = match source {
         SourceId::Geonames => "tsv",
         SourceId::UdGermanGsd => "conllu",
+        SourceId::Wiktionary => "jsonl.gz",
         _ => "json",
     };
     format!("{}-{}.{}", source, suffix.to_lowercase(), extension)
@@ -329,7 +309,7 @@ pub fn suggested_output_name(source: SourceId, suffix: &str) -> String {
 
 pub fn built_in_fetch_plan(
     source: SourceId,
-    _lang: Option<&str>,
+    lang: Option<&str>,
     country: Option<&str>,
     _region: Option<&str>,
 ) -> Result<FetchPlan, Box<dyn std::error::Error>> {
@@ -362,10 +342,55 @@ pub fn built_in_fetch_plan(
             version: "r2.13".to_string(),
             output_suffix: "r2.13".to_string(),
         }),
+        SourceId::Wiktionary => {
+            let lang = lang.ok_or("wiktionary built-in fetch requires --lang")?;
+            let (url, version) = wiktionary::built_in_download(lang)?;
+            Ok(FetchPlan {
+                source_url: url.clone(),
+                urls: vec![url],
+                version,
+                output_suffix: lang.to_ascii_lowercase(),
+            })
+        }
         _ => Err(format!(
-            "{source} does not have a built-in fetch workflow yet; pass --url or --sample"
+            "{source} does not have a built-in fetch workflow; pass --url with a documented upstream endpoint"
         )
         .into()),
+    }
+}
+
+pub fn fetch_guidance(source: SourceId) -> &'static str {
+    match source {
+        SourceId::Geonames => {
+            "built-in download; use --country for a national extract or omit it for allCountries"
+        }
+        SourceId::UdGermanGsd => {
+            "built-in download; fetches the UD German GSD r2.13 train/dev/test files"
+        }
+        SourceId::Wiktionary => {
+            "built-in download; requires --lang and --acknowledge-share-alike, with Kaikki-backed editions for de/es/fr/it/nl/pl/pt/tr/cs and English words"
+        }
+        SourceId::Wikidata => {
+            "URL-driven; point --url at a Wikidata entity export such as Special:EntityData/Q64.json or a curated entities JSON file"
+        }
+        SourceId::Gnd => {
+            "URL-driven; point --url at a lobid.org GND record or search result JSON feed"
+        }
+        SourceId::Orcid => {
+            "URL-driven; point --url at an ORCID public API personal-details document for a curated researcher set"
+        }
+        SourceId::Musicbrainz => {
+            "URL-driven; point --url at a MusicBrainz ws/2 search result or entity JSON document"
+        }
+        SourceId::Getty => {
+            "URL-driven; point --url at a Getty linked-art JSON record such as AAT or TGN"
+        }
+        SourceId::Dbpedia => {
+            "URL-driven; point --url at a DBpedia Lookup API result or a resource-graph JSON response"
+        }
+        SourceId::Openstreetmap => {
+            "URL-driven; point --url at a Nominatim JSON search scoped to the locality set you need, and acknowledge ODbL"
+        }
     }
 }
 
@@ -438,7 +463,7 @@ pub fn validate_source_bytes(
             openstreetmap::parse(bytes)?;
             Ok(())
         }
-        _ => Ok(()),
+        SourceId::Wiktionary => wiktionary::validate(bytes),
     }
 }
 
@@ -459,7 +484,6 @@ pub fn sample_payload(
         SourceId::Wiktionary => wiktionary::sample(lang),
         SourceId::Dbpedia => dbpedia::sample(lang),
         SourceId::Openstreetmap => openstreetmap::sample(region),
-        SourceId::Omw => omw::sample(lang),
     }
 }
 
@@ -483,10 +507,9 @@ pub fn prepare_source(
         SourceId::Orcid => orcid::parse(bytes)?,
         SourceId::Musicbrainz => musicbrainz::parse(bytes)?,
         SourceId::Getty => getty::parse(bytes)?,
-        SourceId::Wiktionary => wiktionary::parse(bytes)?,
+        SourceId::Wiktionary => wiktionary::parse(bytes, lang)?,
         SourceId::Dbpedia => dbpedia::parse(bytes)?,
         SourceId::Openstreetmap => openstreetmap::parse(bytes)?,
-        SourceId::Omw => omw::parse(bytes)?,
     };
 
     let payload = match kind {
@@ -544,126 +567,5 @@ fn kind_label(kind: PreparedKind) -> &'static str {
         PreparedKind::MultiwordMap => "multiword-map",
         PreparedKind::RankedCandidates => "ranked-candidates",
         PreparedKind::ProtectedForms => "protected-forms",
-    }
-}
-
-pub(crate) fn parse_json_records(
-    bytes: &[u8],
-) -> Result<Vec<SourceRecord>, Box<dyn std::error::Error>> {
-    let value: Value = serde_json::from_slice(bytes)?;
-    let items = match value {
-        Value::Array(items) => items,
-        Value::Object(mut object) => object
-            .remove("items")
-            .or_else(|| object.remove("records"))
-            .or_else(|| object.remove("entities"))
-            .map(|nested| match nested {
-                Value::Array(items) => items,
-                other => vec![other],
-            })
-            .unwrap_or_else(|| vec![Value::Object(object)]),
-        other => vec![other],
-    };
-
-    let mut records = Vec::new();
-    for item in items {
-        if let Some(record) = record_from_value(&item) {
-            records.push(record);
-        }
-    }
-    Ok(records)
-}
-
-pub(crate) fn sample_json(id: &str, locale: Option<&str>, rows: &[(&str, &[&str])]) -> Vec<u8> {
-    let payload = serde_json::json!({
-        "source": id,
-        "locale": locale.unwrap_or("und"),
-        "items": rows.iter().map(|(canonical, aliases)| serde_json::json!({
-            "canonical": canonical,
-            "aliases": aliases,
-            "score": if canonical.contains(' ') { 1.5 } else { 1.0 },
-        })).collect::<Vec<_>>(),
-    });
-    serde_json::to_vec_pretty(&payload).expect("sample serialization should succeed")
-}
-
-fn record_from_value(value: &Value) -> Option<SourceRecord> {
-    let object = value.as_object()?;
-    let canonical = string_fields(
-        object,
-        &[
-            "canonical",
-            "name",
-            "label",
-            "title",
-            "display_name",
-            "value",
-        ],
-    )?;
-    let mut aliases = Vec::new();
-    for key in [
-        "aliases",
-        "alias",
-        "aka",
-        "labels",
-        "names",
-        "alt_name",
-        "alternate_names",
-    ] {
-        if let Some(value) = object.get(key) {
-            collect_aliases(value, &mut aliases);
-        }
-    }
-    let score = object
-        .get("score")
-        .and_then(Value::as_f64)
-        .map(|value| value as f32)
-        .unwrap_or(1.0);
-    Some(SourceRecord {
-        canonical,
-        aliases,
-        score,
-    })
-}
-
-fn string_fields(object: &serde_json::Map<String, Value>, keys: &[&str]) -> Option<String> {
-    keys.iter()
-        .find_map(|key| object.get(*key))
-        .and_then(value_to_string)
-}
-
-fn value_to_string(value: &Value) -> Option<String> {
-    match value {
-        Value::String(value) => Some(value.trim().to_string()),
-        Value::Number(number) => Some(number.to_string()),
-        Value::Array(values) => values.iter().find_map(value_to_string),
-        Value::Object(map) => map.values().find_map(value_to_string),
-        _ => None,
-    }
-}
-
-fn collect_aliases(value: &Value, aliases: &mut Vec<String>) {
-    match value {
-        Value::String(value) => split_aliases(value, aliases),
-        Value::Array(values) => {
-            for value in values {
-                collect_aliases(value, aliases);
-            }
-        }
-        Value::Object(map) => {
-            for value in map.values() {
-                collect_aliases(value, aliases);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn split_aliases(value: &str, aliases: &mut Vec<String>) {
-    for part in value.split(['|', ';']) {
-        let trimmed = part.trim();
-        if !trimmed.is_empty() {
-            aliases.push(trimmed.to_string());
-        }
     }
 }
