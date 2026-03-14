@@ -21,3 +21,12 @@ Prefer `wikidata`, `gnd`, `orcid`, and `musicbrainz` when you want the cleanest 
 Use `geonames` and `getty` when attribution-heavy data is worth the extra compliance work.
 
 Treat `wiktionary`, `dbpedia`, `openstreetmap`, and `ud-german-gsd` as opt-in workflows only.
+
+## Fetch support
+
+Built-in upstream fetch support currently exists for:
+
+- `geonames`
+- `ud-german-gsd`
+
+Other sources still require an explicit `--url` for real data, or `--sample` for deterministic local fixtures. This keeps the CLI from silently substituting toy sample payloads when a production fetch path does not exist yet.

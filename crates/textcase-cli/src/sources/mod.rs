@@ -18,7 +18,10 @@ use serde_json::Value;
 use textcase::lexicon::{PreparedKind, PreparedLexicon, PreparedPayload};
 use textcase::plugin::{LicenseMetadata, SourceMetadata};
 
-use crate::prepare::{canonical_map, multiword_map, ranked};
+use crate::{
+    manifest::FetchedSourceManifest,
+    prepare::{canonical_map, multiword_map, ranked},
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, ValueEnum)]
 #[value(rename_all = "kebab-case")]
@@ -96,6 +99,13 @@ pub struct SourceRecord {
     pub canonical: String,
     pub aliases: Vec<String>,
     pub score: f32,
+}
+
+pub struct FetchPlan {
+    pub urls: Vec<String>,
+    pub source_url: String,
+    pub version: String,
+    pub output_suffix: String,
 }
 
 const WIKIDATA_KINDS: &[PreparedKind] = &[PreparedKind::CanonicalMap, PreparedKind::MultiwordMap];
@@ -308,19 +318,100 @@ pub fn require_acknowledgement(
     }
 }
 
-pub fn suggested_output_name(
-    source: SourceId,
-    lang: Option<&str>,
-    country: Option<&str>,
-    region: Option<&str>,
-) -> String {
-    let suffix = lang.or(country).or(region).unwrap_or("sample");
+pub fn suggested_output_name(source: SourceId, suffix: &str) -> String {
     let extension = match source {
         SourceId::Geonames => "tsv",
         SourceId::UdGermanGsd => "conllu",
         _ => "json",
     };
     format!("{}-{}.{}", source, suffix.to_lowercase(), extension)
+}
+
+pub fn built_in_fetch_plan(
+    source: SourceId,
+    _lang: Option<&str>,
+    country: Option<&str>,
+    _region: Option<&str>,
+) -> Result<FetchPlan, Box<dyn std::error::Error>> {
+    match source {
+        SourceId::Geonames => {
+            let (country_code, output_suffix) = match country {
+                Some(code) => (code.to_ascii_uppercase(), code.to_ascii_lowercase()),
+                None => ("allCountries".to_string(), "allcountries".to_string()),
+            };
+            Ok(FetchPlan {
+                source_url: format!(
+                    "https://download.geonames.org/export/dump/{country_code}.zip"
+                ),
+                urls: vec![format!(
+                    "https://download.geonames.org/export/dump/{country_code}.zip"
+                )],
+                version: country_code.clone(),
+                output_suffix,
+            })
+        }
+        SourceId::UdGermanGsd => Ok(FetchPlan {
+            source_url:
+                "https://raw.githubusercontent.com/UniversalDependencies/UD_German-GSD/r2.13/"
+                    .to_string(),
+            urls: vec![
+                "https://raw.githubusercontent.com/UniversalDependencies/UD_German-GSD/r2.13/de_gsd-ud-train.conllu".to_string(),
+                "https://raw.githubusercontent.com/UniversalDependencies/UD_German-GSD/r2.13/de_gsd-ud-dev.conllu".to_string(),
+                "https://raw.githubusercontent.com/UniversalDependencies/UD_German-GSD/r2.13/de_gsd-ud-test.conllu".to_string(),
+            ],
+            version: "r2.13".to_string(),
+            output_suffix: "r2.13".to_string(),
+        }),
+        _ => Err(format!(
+            "{source} does not have a built-in fetch workflow yet; pass --url or --sample"
+        )
+        .into()),
+    }
+}
+
+pub fn normalize_download(
+    source: SourceId,
+    downloads: Vec<Vec<u8>>,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    match source {
+        SourceId::Geonames => {
+            let archive = downloads
+                .into_iter()
+                .next()
+                .ok_or("GeoNames fetch returned no payload")?;
+            geonames::extract_zip(&archive)
+        }
+        SourceId::UdGermanGsd => {
+            Ok(downloads
+                .into_iter()
+                .enumerate()
+                .fold(Vec::new(), |mut merged, (index, bytes)| {
+                    if index > 0 && !merged.ends_with(b"\n") {
+                        merged.push(b'\n');
+                    }
+                    merged.extend_from_slice(&bytes);
+                    if !merged.ends_with(b"\n") {
+                        merged.push(b'\n');
+                    }
+                    merged
+                }))
+        }
+        _ => Ok(downloads
+            .into_iter()
+            .next()
+            .ok_or("download returned no payload")?),
+    }
+}
+
+pub fn validate_source_bytes(
+    source: SourceId,
+    bytes: &[u8],
+) -> Result<(), Box<dyn std::error::Error>> {
+    match source {
+        SourceId::Geonames => geonames::validate(bytes),
+        SourceId::UdGermanGsd => ud_german_gsd::validate(bytes),
+        _ => Ok(()),
+    }
 }
 
 pub fn sample_payload(
@@ -349,6 +440,7 @@ pub fn prepare_source(
     bytes: &[u8],
     kind: PreparedKind,
     lang: Option<&str>,
+    provenance: Option<&FetchedSourceManifest>,
 ) -> Result<PreparedLexicon, Box<dyn std::error::Error>> {
     let descriptor = descriptor(source);
     if !descriptor.plugin_kinds.contains(&kind) {
@@ -393,8 +485,12 @@ pub fn prepare_source(
         sources: vec![SourceMetadata {
             id: source.to_string(),
             display_name: descriptor.display_name.to_string(),
-            url: format!("https://docs.invalid/textcase/sources/{}", source),
-            version: "deterministic-sample".to_string(),
+            url: provenance
+                .map(|manifest| manifest.source_url.clone())
+                .unwrap_or_else(|| format!("https://docs.invalid/textcase/sources/{}", source)),
+            version: provenance
+                .map(|manifest| manifest.version.clone())
+                .unwrap_or_else(|| "user-supplied".to_string()),
             class: descriptor.class.to_string(),
         }],
         generated_at: "1970-01-01T00:00:00Z".to_string(),
@@ -446,64 +542,6 @@ pub(crate) fn parse_json_records(
         if let Some(record) = record_from_value(&item) {
             records.push(record);
         }
-    }
-    Ok(records)
-}
-
-pub(crate) fn parse_delimited_records(
-    bytes: &[u8],
-    delimiter: char,
-) -> Result<Vec<SourceRecord>, Box<dyn std::error::Error>> {
-    let text = std::str::from_utf8(bytes)?;
-    let mut lines = text.lines();
-    let Some(header_line) = lines.next() else {
-        return Ok(Vec::new());
-    };
-    let header: Vec<String> = header_line
-        .split(delimiter)
-        .map(|part| part.trim().to_lowercase())
-        .collect();
-    let mut records = Vec::new();
-    for line in lines {
-        if line.trim().is_empty() {
-            continue;
-        }
-        let fields: Vec<&str> = line.split(delimiter).collect();
-        let mut object = serde_json::Map::new();
-        for (index, name) in header.iter().enumerate() {
-            if let Some(value) = fields.get(index) {
-                object.insert(name.clone(), Value::String(value.trim().to_string()));
-            }
-        }
-        if let Some(record) = record_from_value(&Value::Object(object)) {
-            records.push(record);
-        }
-    }
-    Ok(records)
-}
-
-pub(crate) fn parse_conllu_records(
-    bytes: &[u8],
-) -> Result<Vec<SourceRecord>, Box<dyn std::error::Error>> {
-    let text = std::str::from_utf8(bytes)?;
-    let mut records = Vec::new();
-    for line in text.lines() {
-        if line.starts_with('#') || line.trim().is_empty() {
-            continue;
-        }
-        let columns: Vec<&str> = line.split('\t').collect();
-        if columns.len() < 4 {
-            continue;
-        }
-        let form = columns[1].trim();
-        let lemma = columns[2].trim();
-        let upos = columns[3].trim();
-        let score = if upos == "PROPN" { 2.0 } else { 1.0 };
-        records.push(SourceRecord {
-            canonical: form.to_string(),
-            aliases: vec![lemma.to_string()],
-            score,
-        });
     }
     Ok(records)
 }
