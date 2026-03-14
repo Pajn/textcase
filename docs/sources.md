@@ -30,3 +30,10 @@ Built-in upstream fetch support currently exists for:
 - `ud-german-gsd`
 
 Other sources still require an explicit `--url` for real data, or `--sample` for deterministic local fixtures. This keeps the CLI from silently substituting toy sample payloads when a production fetch path does not exist yet.
+
+The explicit-URL path has been validated against real upstream JSON for:
+
+- `wikidata` via `Special:EntityData`
+- `gnd` via `lobid.org`
+- `musicbrainz` via `ws/2`
+- `getty` via linked-art JSON
