@@ -15,6 +15,7 @@ fn list_sources_includes_classes() {
     assert!(stdout.contains("wikidata"));
     assert!(stdout.contains("green"));
     assert!(stdout.contains("ud-german-gsd"));
+    assert!(!stdout.contains("omw"));
 }
 
 #[test]
@@ -26,6 +27,7 @@ fn show_license_reports_acknowledgement_requirements() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("--acknowledge-cc-by-sa"));
+    assert!(stdout.contains("fetch guidance:"));
 }
 
 #[test]
@@ -43,7 +45,7 @@ fn orange_source_requires_acknowledgement() {
 }
 
 #[test]
-fn unsupported_source_requires_url_or_sample() {
+fn unsupported_source_requires_documented_url() {
     let dir = unique_temp_dir("textcase-cli-fetch-gap");
     fs::create_dir_all(&dir).unwrap();
     let output = Command::new(bin())
@@ -60,7 +62,8 @@ fn unsupported_source_requires_url_or_sample() {
         .unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("--url or --sample"));
+    assert!(stderr.contains("does not have a built-in fetch workflow"));
+    assert!(stderr.contains("--url"));
 }
 
 #[test]

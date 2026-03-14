@@ -11,6 +11,7 @@ rust-version = "1.85"
 [workspace.dependencies]
 textcase = { path = "crates/textcase" }
 clap = { version = "4.5.39", features = ["cargo", "derive", "wrap_help"] }
+flate2 = "1.1.1"
 fst = "0.4.7"
 memmap2 = "0.9.5"
 quick-xml = "0.37.5"
