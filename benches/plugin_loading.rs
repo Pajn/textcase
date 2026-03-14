@@ -1,1 +1,1 @@
-fn main() {}
+include!("../crates/textcase/benches/plugin_loading.rs");

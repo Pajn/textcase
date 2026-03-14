@@ -14,3 +14,22 @@ serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 unicode-segmentation.workspace = true
+
+[dev-dependencies]
+criterion = "0.5.1"
+
+[[bench]]
+name = "casing"
+harness = false
+
+[[bench]]
+name = "lookup"
+harness = false
+
+[[bench]]
+name = "plugin_loading"
+harness = false
+
+[[bench]]
+name = "german"
+harness = false
