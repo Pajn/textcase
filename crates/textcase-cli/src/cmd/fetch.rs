@@ -1,6 +1,7 @@
 use std::fs;
 
 use reqwest::blocking::Client;
+use reqwest::header::{ACCEPT, HeaderMap, HeaderValue, USER_AGENT};
 
 use crate::{
     cli::FetchArgs,
@@ -41,7 +42,7 @@ pub fn run(args: FetchArgs) -> Result<String, Box<dyn std::error::Error>> {
             sample: true,
         }
     } else if let Some(url) = &args.url {
-        let bytes = Client::new()
+        let bytes = http_client()?
             .get(url)
             .send()?
             .error_for_status()?
@@ -69,7 +70,7 @@ pub fn run(args: FetchArgs) -> Result<String, Box<dyn std::error::Error>> {
             args.country.as_deref(),
             args.region.as_deref(),
         )?;
-        let client = Client::new();
+        let client = http_client()?;
         let mut downloads = Vec::with_capacity(plan.urls.len());
         for url in &plan.urls {
             downloads.push(
@@ -121,4 +122,19 @@ struct FetchedPayload {
     version: String,
     output_suffix: String,
     sample: bool,
+}
+
+fn http_client() -> Result<Client, Box<dyn std::error::Error>> {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        USER_AGENT,
+        HeaderValue::from_static("textcase-cli/0.1.0 (+https://github.com/github/copilot-cli)"),
+    );
+    headers.insert(
+        ACCEPT,
+        HeaderValue::from_static(
+            "application/json, application/*+json, text/plain;q=0.9, */*;q=0.8",
+        ),
+    );
+    Ok(Client::builder().default_headers(headers).build()?)
 }

@@ -410,6 +410,22 @@ pub fn validate_source_bytes(
     match source {
         SourceId::Geonames => geonames::validate(bytes),
         SourceId::UdGermanGsd => ud_german_gsd::validate(bytes),
+        SourceId::Wikidata => {
+            wikidata::parse(bytes, None)?;
+            Ok(())
+        }
+        SourceId::Gnd => {
+            gnd::parse(bytes)?;
+            Ok(())
+        }
+        SourceId::Musicbrainz => {
+            musicbrainz::parse(bytes)?;
+            Ok(())
+        }
+        SourceId::Getty => {
+            getty::parse(bytes)?;
+            Ok(())
+        }
         _ => Ok(()),
     }
 }
@@ -448,7 +464,7 @@ pub fn prepare_source(
     }
 
     let records = match source {
-        SourceId::Wikidata => wikidata::parse(bytes)?,
+        SourceId::Wikidata => wikidata::parse(bytes, lang)?,
         SourceId::Geonames => geonames::parse(bytes)?,
         SourceId::UdGermanGsd => ud_german_gsd::parse(bytes)?,
         SourceId::Gnd => gnd::parse(bytes)?,
