@@ -43,6 +43,27 @@ fn orange_source_requires_acknowledgement() {
 }
 
 #[test]
+fn unsupported_source_requires_url_or_sample() {
+    let dir = unique_temp_dir("textcase-cli-fetch-gap");
+    fs::create_dir_all(&dir).unwrap();
+    let output = Command::new(bin())
+        .args([
+            "lexicon",
+            "fetch",
+            "wikidata",
+            "--lang",
+            "en",
+            "--output-dir",
+        ])
+        .arg(&dir)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("--url or --sample"));
+}
+
+#[test]
 fn prepare_build_and_inspect_json_plugin() {
     let dir = unique_temp_dir("textcase-cli-json");
     let raw = dir.join("raw");
@@ -58,6 +79,7 @@ fn prepare_build_and_inspect_json_plugin() {
                 "wikidata",
                 "--lang",
                 "en",
+                "--sample",
                 "--output-dir"
             ])
             .arg(&raw)
@@ -67,6 +89,7 @@ fn prepare_build_and_inspect_json_plugin() {
     );
 
     let input = raw.join("wikidata-en.json");
+    assert!(input.with_extension("source.json").exists());
     assert!(
         Command::new(bin())
             .args(["lexicon", "prepare", "wikidata", "--input"])
@@ -111,7 +134,15 @@ fn prepare_build_and_inspect_fst_plugin() {
 
     assert!(
         Command::new(bin())
-            .args(["lexicon", "fetch", "gnd", "--lang", "de", "--output-dir"])
+            .args([
+                "lexicon",
+                "fetch",
+                "gnd",
+                "--lang",
+                "de",
+                "--sample",
+                "--output-dir",
+            ])
             .arg(&raw)
             .status()
             .unwrap()
@@ -119,6 +150,7 @@ fn prepare_build_and_inspect_fst_plugin() {
     );
 
     let input = raw.join("gnd-de.json");
+    assert!(input.with_extension("source.json").exists());
     assert!(
         Command::new(bin())
             .args(["lexicon", "prepare", "gnd", "--input"])

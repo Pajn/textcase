@@ -7,7 +7,7 @@ Current MSRV is `1.85`. The workspace currently exposes no optional Cargo featur
 It provides:
 
 - a `textcase` library with sentence/title conversion, locale-aware casing helpers, language profiles, German heuristic modes, and pluggable lexicons
-- a `textcase` CLI for listing sources, showing licensing guidance, fetching sample or remote data, preparing lexicons, building JSON/FST plugins, and inspecting plugin metadata
+- a `textcase` CLI for listing sources, showing licensing guidance, fetching upstream or sample data, preparing lexicons, building JSON/FST plugins, and inspecting plugin metadata
 - explicit licensing boundaries so the core crate remains usable with zero external data while optional plugins add better proper-noun and lexical recovery
 
 ## Workspace layout
@@ -40,13 +40,15 @@ assert_eq!(convert("the rise of github - inside rust tooling", &options), "The r
 ```bash
 textcase lexicon list-sources
 textcase lexicon show-license wikidata
-textcase lexicon fetch wikidata --lang en --output-dir data/raw
+textcase lexicon fetch wikidata --lang en --sample --output-dir data/raw
 textcase lexicon prepare wikidata --input data/raw/wikidata-en.json --output data/prepared/wikidata-en.json --kind canonical-map --lang en
 textcase lexicon build-plugin data/prepared/wikidata-en.json --format json --output data/plugins/wikidata-en.json
 textcase lexicon inspect-plugin data/plugins/wikidata-en.json
 ```
 
-If `fetch` is called without `--url`, the CLI writes a deterministic sample payload so the end-to-end workflow stays testable offline. Pass `--url` to download real source data.
+Use `--sample` when you want deterministic local fixtures for tests or offline examples.
+
+For real upstream downloads, `fetch` currently has built-in workflows for `geonames` and `ud-german-gsd`. Other sources currently require either an explicit `--url` or `--sample`; they no longer silently pretend to fetch production data.
 
 ## Source classes
 

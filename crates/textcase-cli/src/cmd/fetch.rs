@@ -1,11 +1,15 @@
-use std::{fs, path::PathBuf};
+use std::fs;
 
 use reqwest::blocking::Client;
 
 use crate::{
     cli::FetchArgs,
     fsutil::ensure_parent_dir,
-    sources::{descriptor, require_acknowledgement, sample_payload, suggested_output_name},
+    manifest::{FetchedSourceManifest, write_source_manifest},
+    sources::{
+        built_in_fetch_plan, descriptor, normalize_download, require_acknowledgement,
+        sample_payload, suggested_output_name, validate_source_bytes,
+    },
 };
 
 pub fn run(args: FetchArgs) -> Result<String, Box<dyn std::error::Error>> {
@@ -16,32 +20,92 @@ pub fn run(args: FetchArgs) -> Result<String, Box<dyn std::error::Error>> {
         args.acknowledge_odbl,
     )?;
 
-    let path = output_path(
-        &args.output_dir,
-        suggested_output_name(
-            args.source,
-            args.lang.as_deref(),
-            args.country.as_deref(),
-            args.region.as_deref(),
-        ),
-    );
-    ensure_parent_dir(&path)?;
-    let bytes = if let Some(url) = &args.url {
-        Client::new()
+    let fetched = if args.sample {
+        let suffix = args
+            .lang
+            .as_deref()
+            .or(args.country.as_deref())
+            .or(args.region.as_deref())
+            .unwrap_or("sample")
+            .to_lowercase();
+        FetchedPayload {
+            bytes: sample_payload(
+                args.source,
+                args.lang.as_deref(),
+                args.country.as_deref(),
+                args.region.as_deref(),
+            ),
+            source_url: format!("sample://textcase/{}", args.source),
+            version: "deterministic-sample".to_string(),
+            output_suffix: suffix,
+            sample: true,
+        }
+    } else if let Some(url) = &args.url {
+        let bytes = Client::new()
             .get(url)
             .send()?
             .error_for_status()?
             .bytes()?
-            .to_vec()
+            .to_vec();
+        let bytes = normalize_download(args.source, vec![bytes])?;
+        validate_source_bytes(args.source, &bytes)?;
+        FetchedPayload {
+            bytes,
+            source_url: url.clone(),
+            version: "user-supplied".to_string(),
+            output_suffix: args
+                .lang
+                .as_deref()
+                .or(args.country.as_deref())
+                .or(args.region.as_deref())
+                .unwrap_or("custom")
+                .to_lowercase(),
+            sample: false,
+        }
     } else {
-        sample_payload(
+        let plan = built_in_fetch_plan(
             args.source,
             args.lang.as_deref(),
             args.country.as_deref(),
             args.region.as_deref(),
-        )
+        )?;
+        let client = Client::new();
+        let mut downloads = Vec::with_capacity(plan.urls.len());
+        for url in &plan.urls {
+            downloads.push(
+                client
+                    .get(url)
+                    .send()?
+                    .error_for_status()?
+                    .bytes()?
+                    .to_vec(),
+            );
+        }
+        let bytes = normalize_download(args.source, downloads)?;
+        validate_source_bytes(args.source, &bytes)?;
+        FetchedPayload {
+            bytes,
+            source_url: plan.source_url,
+            version: plan.version,
+            output_suffix: plan.output_suffix,
+            sample: false,
+        }
     };
-    fs::write(&path, bytes)?;
+
+    let path = args
+        .output_dir
+        .join(suggested_output_name(args.source, &fetched.output_suffix));
+    ensure_parent_dir(&path)?;
+    fs::write(&path, &fetched.bytes)?;
+    write_source_manifest(
+        &path,
+        &FetchedSourceManifest {
+            source: args.source.to_string(),
+            source_url: fetched.source_url,
+            version: fetched.version,
+            sample: fetched.sample,
+        },
+    )?;
 
     let descriptor = descriptor(args.source);
     Ok(format!(
@@ -51,6 +115,10 @@ pub fn run(args: FetchArgs) -> Result<String, Box<dyn std::error::Error>> {
     ))
 }
 
-fn output_path(output_dir: &std::path::Path, filename: String) -> PathBuf {
-    output_dir.join(filename)
+struct FetchedPayload {
+    bytes: Vec<u8>,
+    source_url: String,
+    version: String,
+    output_suffix: String,
+    sample: bool,
 }
