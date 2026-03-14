@@ -418,12 +418,20 @@ pub fn validate_source_bytes(
             gnd::parse(bytes)?;
             Ok(())
         }
+        SourceId::Orcid => {
+            orcid::parse(bytes)?;
+            Ok(())
+        }
         SourceId::Musicbrainz => {
             musicbrainz::parse(bytes)?;
             Ok(())
         }
         SourceId::Getty => {
             getty::parse(bytes)?;
+            Ok(())
+        }
+        SourceId::Dbpedia => {
+            dbpedia::parse(bytes)?;
             Ok(())
         }
         _ => Ok(()),
