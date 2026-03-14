@@ -16,6 +16,7 @@ use super::{
     fst::{FstPayload, LoadedFstPlugin},
 };
 
+/// A mergeable lexicon container backed by JSON and/or FST plugins.
 #[derive(Clone, Debug, Default)]
 pub struct PluginSet {
     word_sets: BTreeMap<String, BTreeSet<String>>,
@@ -26,6 +27,7 @@ pub struct PluginSet {
 }
 
 impl PluginSet {
+    /// Builds a plugin set from a JSON plugin payload.
     pub fn from_json_bytes(bytes: &[u8]) -> Result<Self> {
         let schema = load_json_plugin(bytes)?;
         let mut set = Self::default();
@@ -33,6 +35,7 @@ impl PluginSet {
         Ok(set)
     }
 
+    /// Builds a plugin set from an on-disk FST plugin.
     pub fn from_fst_path(path: impl AsRef<Path>) -> Result<Self> {
         let plugin = LoadedFstPlugin::from_path(path)?;
         let mut set = Self::default();
@@ -93,6 +96,7 @@ impl PluginSet {
         Ok(set)
     }
 
+    /// Merges two plugin sets, giving entries from `other` precedence on key collisions.
     pub fn merge(mut self, other: Self) -> Self {
         merge_map_set(&mut self.word_sets, other.word_sets);
         merge_nested_map(&mut self.canonical_maps, other.canonical_maps);

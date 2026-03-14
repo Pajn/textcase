@@ -2,6 +2,7 @@ use std::{io, path::PathBuf};
 
 use thiserror::Error;
 
+/// Errors returned by `textcase` when converting text or loading plugins.
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("unsupported locale: {0}")]
@@ -20,4 +21,5 @@ pub enum Error {
     Fst(#[from] fst::Error),
 }
 
+/// Convenience alias for results returned by `textcase`.
 pub type Result<T> = std::result::Result<T, Error>;
