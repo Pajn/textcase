@@ -21,6 +21,7 @@ struct RecaseContext<'a> {
     previous_word2: Option<&'a str>,
 }
 
+/// Converts text according to the provided locale, case mode, and lexicon settings.
 pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
     let prepared = prepare_input(input, options);
     let mut tokens = tokenize(&prepared);
@@ -98,6 +99,13 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
     reconstruct(&tokens)
 }
 
+/// Converts text to sentence case with default options for the given locale.
+///
+/// ```
+/// use textcase::sentence_case;
+///
+/// assert_eq!(sentence_case("the rise of github", "en"), "The rise of GitHub");
+/// ```
 pub fn sentence_case(input: &str, locale: &str) -> String {
     let options = CaseOptions {
         locale,
@@ -106,6 +114,7 @@ pub fn sentence_case(input: &str, locale: &str) -> String {
     convert(input, &options)
 }
 
+/// Converts text to sentence-title mode with default subtitle capitalization rules.
 pub fn sentence_case_title(input: &str, locale: &str) -> String {
     let options = CaseOptions {
         locale,

@@ -10,6 +10,7 @@ use crate::util::checksum_hex;
 
 use super::Candidate;
 
+/// Payload kinds supported by prepared lexicon files.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum PreparedKind {
@@ -21,6 +22,7 @@ pub enum PreparedKind {
 }
 
 impl PreparedKind {
+    /// Converts the prepared-file kind into the corresponding plugin kind.
     pub fn to_plugin_kind(self) -> PluginKind {
         match self {
             PreparedKind::WordSet => PluginKind::WordSet,
@@ -32,6 +34,7 @@ impl PreparedKind {
     }
 }
 
+/// Payload values stored in a prepared lexicon file before plugin generation.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(tag = "payload_kind", content = "payload", rename_all = "kebab-case")]
 pub enum PreparedPayload {
@@ -42,18 +45,27 @@ pub enum PreparedPayload {
     ProtectedForms(BTreeMap<String, String>),
 }
 
+/// Deterministic intermediate representation produced by `textcase lexicon prepare`.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct PreparedLexicon {
+    /// Prepared lexicon name.
     pub name: String,
+    /// Payload kind.
     pub kind: PreparedKind,
+    /// Locale for the prepared payload.
     pub locale: String,
+    /// License metadata carried into the final plugin.
     pub license: LicenseMetadata,
+    /// Source metadata carried into the final plugin.
     pub sources: Vec<SourceMetadata>,
+    /// RFC 3339 generation timestamp.
     pub generated_at: String,
+    /// Prepared payload.
     pub payload: PreparedPayload,
 }
 
 impl PreparedLexicon {
+    /// Builds a JSON plugin schema from the prepared payload and metadata.
     pub fn to_plugin_schema(&self) -> PluginSchema {
         let payload = match &self.payload {
             PreparedPayload::WordSet(values) => PluginPayload::WordSet(values.clone()),
