@@ -7,7 +7,7 @@ Current MSRV is `1.85`. The workspace currently exposes no optional Cargo featur
 It provides:
 
 - a `textcase` library with sentence/title conversion, locale-aware casing helpers, language profiles, German heuristic modes, and pluggable lexicons
-- a `textcase` CLI for listing sources, showing licensing guidance, fetching upstream or sample data, preparing lexicons, building JSON/FST plugins, and inspecting plugin metadata
+- a `textcase` CLI for listing sources, showing licensing guidance, fetching upstream data, preparing lexicons, building JSON/FST plugins, and inspecting plugin metadata
 - explicit licensing boundaries so the core crate remains usable with zero external data while optional plugins add better proper-noun and lexical recovery
 
 ## Workspace layout
@@ -39,23 +39,49 @@ assert_eq!(convert("the rise of github - inside rust tooling", &options), "The r
 
 ```bash
 textcase lexicon list-sources
-textcase lexicon show-license wikidata
-textcase lexicon fetch wikidata --lang en --sample --output-dir data/raw
-textcase lexicon prepare wikidata --input data/raw/wikidata-en.json --output data/prepared/wikidata-en.json --kind canonical-map --lang en
-textcase lexicon build-plugin data/prepared/wikidata-en.json --format json --output data/plugins/wikidata-en.json
-textcase lexicon inspect-plugin data/plugins/wikidata-en.json
+textcase lexicon show-license geonames
+textcase lexicon fetch geonames --country DE --output-dir data/raw
+textcase lexicon prepare geonames --input data/raw/geonames-de.tsv --output data/prepared/geonames-de.json --kind canonical-map --lang de
+textcase lexicon build-plugin data/prepared/geonames-de.json --format fst --output data/plugins/geonames-de.tclx
+textcase lexicon inspect-plugin data/plugins/geonames-de.tclx
 ```
 
-Use `--sample` when you want deterministic local fixtures for tests or offline examples.
+For opt-in lexical support, a complete built-in Wiktionary workflow is also available:
 
-For real upstream downloads, `fetch` currently has built-in workflows for `geonames` and `ud-german-gsd`. Other sources currently require either an explicit `--url` or `--sample`; they no longer silently pretend to fetch production data.
+```bash
+textcase lexicon show-license wiktionary
+textcase lexicon fetch wiktionary --lang de --acknowledge-share-alike --output-dir data/raw
+textcase lexicon prepare wiktionary --input data/raw/wiktionary-de.jsonl.gz --output data/prepared/wiktionary-de.json --kind word-set --lang de --acknowledge-share-alike
+```
+
+`fetch` has built-in workflows for `geonames`, `ud-german-gsd`, and `wiktionary`.
+
+The remaining sources are intentionally URL-driven because their upstreams are query-oriented APIs rather than single canonical dumps. The setup guide in `docs/sources.md` explains what each source provides, when to use it, and the exact endpoint style to pass with `--url`.
+
+## Choosing a source
+
+Start with the cleanly redistributable proper-noun sources:
+
+- `wikidata` for multilingual entities and aliases
+- `gnd` for authority-style German and European names
+- `orcid` for researcher names
+- `musicbrainz` for artists, albums, labels, and works
+
+Add domain-specific sources as needed:
+
+- `geonames` for country- or world-scale place names
+- `getty` for art, heritage, and museum vocabularies
+- `openstreetmap` for street- and locality-level geography
+- `wiktionary` for lexical hints and inflected forms
+- `ud-german-gsd` for German ranked-candidate enrichment
+
+The full source selection and setup guide lives in `docs/sources.md`.
 
 ## Source classes
 
 - `green`: clean redistribution story (`wikidata`, `gnd`, `orcid`, `musicbrainz`)
 - `yellow`: attribution guidance required (`geonames`, `getty`)
 - `orange`: stronger obligations and opt-in-only workflows (`wiktionary`, `dbpedia`, `openstreetmap`, `ud-german-gsd`)
-- `gray`: experimental / lower-priority sources (`omw`)
 
 ## Development guardrails
 

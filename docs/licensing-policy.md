@@ -9,4 +9,3 @@ Source classes:
 - `green`: clean redistribution story
 - `yellow`: attribution guidance required
 - `orange`: stronger obligations; opt-in only
-- `gray`: experimental / lower-priority
