@@ -96,7 +96,9 @@ fn prepare_build_and_inspect_json_plugin() {
         .output()
         .unwrap();
     assert!(output.status.success());
-    assert!(String::from_utf8_lossy(&output.stdout).contains("canonical-map"));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("canonical-map"));
+    assert!(stdout.contains("entries: "));
 }
 
 #[test]
@@ -146,7 +148,9 @@ fn prepare_build_and_inspect_fst_plugin() {
         .output()
         .unwrap();
     assert!(output.status.success());
-    assert!(String::from_utf8_lossy(&output.stdout).contains("canonical-map"));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("canonical-map"));
+    assert!(stdout.contains("entries: "));
 }
 
 fn bin() -> &'static str {
