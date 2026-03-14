@@ -11,10 +11,10 @@ pub struct LanguageProfile {
 
 impl LanguageProfile {
     pub fn keeps_lowercase_in_title(self, token: &str) -> bool {
-        self.stop_words.iter().any(|entry| *entry == token)
+        self.stop_words.contains(&token)
     }
 
     pub fn keeps_particle_lowercase(self, token: &str) -> bool {
-        self.lowercase_particles.iter().any(|entry| *entry == token)
+        self.lowercase_particles.contains(&token)
     }
 }

@@ -2,6 +2,8 @@
 
 `textcase` is a Rust workspace for multilingual sentence/title recasing in Latin-script languages.
 
+Current MSRV is `1.85`. The workspace currently exposes no optional Cargo features; new features should only be added when they clearly preserve a usable zero-plugin default and keep licensing boundaries explicit.
+
 It provides:
 
 - a `textcase` library with sentence/title conversion, locale-aware casing helpers, language profiles, German heuristic modes, and pluggable lexicons
@@ -52,6 +54,13 @@ If `fetch` is called without `--url`, the CLI writes a deterministic sample payl
 - `yellow`: attribution guidance required (`geonames`, `getty`)
 - `orange`: stronger obligations and opt-in-only workflows (`wiktionary`, `dbpedia`, `openstreetmap`, `ud-german-gsd`)
 - `gray`: experimental / lower-priority sources (`omw`)
+
+## Development guardrails
+
+- format with `cargo fmt --all`
+- lint with `cargo clippy --workspace --all-targets -- -D warnings`
+- test with `cargo test --workspace`
+- CI runs the same checks on pushes and pull requests
 
 ## German modes
 
