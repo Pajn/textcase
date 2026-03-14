@@ -434,6 +434,10 @@ pub fn validate_source_bytes(
             dbpedia::parse(bytes)?;
             Ok(())
         }
+        SourceId::Openstreetmap => {
+            openstreetmap::parse(bytes)?;
+            Ok(())
+        }
         _ => Ok(()),
     }
 }

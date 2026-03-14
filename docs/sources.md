@@ -39,3 +39,4 @@ The explicit-URL path has been validated against real upstream JSON for:
 - `musicbrainz` via `ws/2`
 - `getty` via linked-art JSON
 - `dbpedia` via the lookup API
+- `openstreetmap` via Nominatim JSON
