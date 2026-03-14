@@ -1,10 +1,11 @@
 use std::{
     collections::BTreeMap,
-    fs,
+    fs::{self, File},
     path::{Path, PathBuf},
 };
 
 use fst::{Map, MapBuilder, Set, SetBuilder};
+use memmap2::Mmap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -23,8 +24,8 @@ pub struct FstSidecar {
 }
 
 pub enum FstPayload {
-    Set(Set<Vec<u8>>),
-    Map(Map<Vec<u8>>),
+    Set(Set<Mmap>),
+    Map(Map<Mmap>),
 }
 
 pub struct LoadedFstPlugin {
@@ -37,7 +38,8 @@ pub struct LoadedFstPlugin {
 impl LoadedFstPlugin {
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
-        let bytes = fs::read(path)?;
+        let file = File::open(path)?;
+        let bytes = unsafe { Mmap::map(&file)? };
         let sidecar_path = sidecar_path(path);
         if !sidecar_path.exists() {
             return Err(Error::MissingPluginMetadata(sidecar_path));
@@ -53,6 +55,13 @@ impl LoadedFstPlugin {
             values: sidecar.values,
             candidate_values: sidecar.candidate_values,
         })
+    }
+
+    pub fn entry_count(&self) -> usize {
+        match &self.payload {
+            FstPayload::Set(set) => set.len(),
+            FstPayload::Map(map) => map.len(),
+        }
     }
 }
 
