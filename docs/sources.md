@@ -35,5 +35,7 @@ The explicit-URL path has been validated against real upstream JSON for:
 
 - `wikidata` via `Special:EntityData`
 - `gnd` via `lobid.org`
+- `orcid` via the public API
 - `musicbrainz` via `ws/2`
 - `getty` via linked-art JSON
+- `dbpedia` via the lookup API
