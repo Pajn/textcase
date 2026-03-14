@@ -9,7 +9,7 @@ pub fn looks_like_noun_context(
     previous: Option<&str>,
     previous2: Option<&str>,
 ) -> bool {
-    if AMBIGUOUS_LOWERCASE.iter().any(|entry| *entry == current) {
+    if AMBIGUOUS_LOWERCASE.contains(&current) {
         return false;
     }
 
@@ -22,15 +22,13 @@ pub fn looks_like_noun_context(
     }
 
     if let Some(prev) = previous {
-        if contexts::ARTICLES.iter().any(|article| *article == prev) {
+        if contexts::ARTICLES.contains(&prev) {
             return true;
         }
     }
 
     if let (Some(prev), Some(prev2)) = (previous, previous2) {
-        if contexts::PREPOSITIONS.iter().any(|prep| *prep == prev2)
-            && contexts::ARTICLES.iter().any(|article| *article == prev)
-        {
+        if contexts::PREPOSITIONS.contains(&prev2) && contexts::ARTICLES.contains(&prev) {
             return true;
         }
     }
