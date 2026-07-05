@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use crate::{
     case::{
         mode_capitalizes_after_subtitle, mode_is_sentence_like, mode_is_title, prepare_input,
-        should_capitalize_after_separator, should_keep_lowercase_in_title,
+        should_keep_lowercase_in_title, subtitle_separator_flags,
     },
     config::{CaseMode, CaseOptions},
     icu::{
@@ -40,6 +40,7 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
     // sequence of acronyms, so acronym preservation must not block conversion.
     let shouting = is_shouting(&prepared);
     let sentence_boundaries = sentence_boundary_flags(&tokens, options.locale);
+    let subtitle_separators = subtitle_separator_flags(&tokens);
     let word_indices: Vec<usize> = tokens
         .iter()
         .enumerate()
@@ -106,10 +107,7 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
                 if sentence_boundaries[index] {
                     sentence_start = true;
                 }
-                if should_capitalize_after_separator(
-                    options.capitalize_after_subtitle_separator,
-                    &token.text,
-                ) {
+                if options.capitalize_after_subtitle_separator && subtitle_separators[index] {
                     after_subtitle = true;
                 }
                 // Punctuation breaks an article/preposition-to-noun bond, so the

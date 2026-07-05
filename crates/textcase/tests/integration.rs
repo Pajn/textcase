@@ -370,6 +370,41 @@ fn subtitle_normalization_converts_flanked_dash() {
 }
 
 #[test]
+fn sentence_title_ignores_ranges_and_attached_colons() {
+    // "a - f" is a range, not a subtitle break.
+    assert_eq!(
+        sentence_case_title("grades a - f explained", "en"),
+        "Grades a - f explained"
+    );
+    // An unspaced colon is a time, ratio, or brand, not a subtitle separator.
+    assert_eq!(
+        sentence_case_title("re:invent recap", "en"),
+        "Re:invent recap"
+    );
+}
+
+#[test]
+fn sentence_title_capitalizes_after_attached_em_dash() {
+    assert_eq!(
+        sentence_case_title("the album—deluxe edition", "en"),
+        "The album—Deluxe edition"
+    );
+}
+
+#[test]
+fn subtitle_normalization_ignores_letter_ranges() {
+    let options = CaseOptions {
+        locale: "en",
+        subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
+        ..CaseOptions::default()
+    };
+    assert_eq!(
+        convert("grades a - f explained", &options),
+        "Grades a - f explained"
+    );
+}
+
+#[test]
 fn sentence_title_capitalizes_after_subtitle_separator() {
     let options = CaseOptions {
         locale: "en",
