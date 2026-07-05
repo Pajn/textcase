@@ -2,6 +2,7 @@
 // and run as doctests and cannot silently go stale.
 #![doc = include_str!("../README.md")]
 
+pub mod analysis;
 pub mod case;
 pub mod config;
 pub mod error;
@@ -12,7 +13,10 @@ pub mod plugin;
 pub mod tokenize;
 pub mod util;
 
-pub use case::{convert, sentence_case, sentence_case_title};
+pub use analysis::{CaseAnalysis, CasingRule, CasingSpan, Confidence};
+pub use case::{
+    convert, convert_analyze, sentence_case, sentence_case_analyze, sentence_case_title,
+};
 pub use config::{CaseMode, CaseOptions, GermanMode, SubtitleSeparatorStyle};
 pub use error::{Error, Result};
 pub use lexicon::{Candidate, LexiconProvider, PluginSet};

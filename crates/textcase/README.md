@@ -122,6 +122,38 @@ println!("{}", convert("wir fliegen nach köln", &options));
 
 `PluginSet::from_json_bytes` loads the JSON container; `merge` combines sets with later entries winning. Plugins are produced by the [`textcase-cli`](https://github.com/Pajn/textcase/blob/main/crates/textcase-cli/README.md) from public data sources — see [docs/sources.md](https://github.com/Pajn/textcase/blob/main/docs/sources.md) for choosing one and [docs/plugin-format.md](https://github.com/Pajn/textcase/blob/main/docs/plugin-format.md) for the container formats.
 
+## Analysis
+
+`convert_analyze` (and its `sentence_case_analyze` sugar) return a `CaseAnalysis` alongside the recased string: an overall `Confidence` and a `CasingSpan` per edit recording the deciding `CasingRule`, its confidence, and whether it changed. The output is byte-identical to `convert`; both share one cascade.
+
+Confidence has three tiers. `Solid` is a structural rule (sentence start, stop-word lowering, plain lowercasing), an explicit lexicon match, or a structural transform. `Unverified` is an ordinary word capitalized as a title word with no lexicon to confirm it is not a name or brand — the open-world case. `Heuristic` is a call that could genuinely be wrong: acronym-versus-word classification, keeping a lone capital as a proper noun, or the German noun heuristics. The analysis's confidence is the most concerning tier across every span, so callers can flag `Heuristic` results for review.
+
+```rust
+use textcase::{sentence_case_analyze, CasingRule, Confidence};
+
+let input = "the NASA probe landed";
+let analysis = sentence_case_analyze(input, "en");
+assert_eq!(analysis.output, "The NASA probe landed");
+// Preserving "NASA" as an acronym is a heuristic, so the whole result is flagged.
+assert_eq!(analysis.confidence, Confidence::Heuristic);
+
+// `source` ranges index your input; `output` ranges index the output. Filter on
+// `changed` for just the edits.
+let changed: Vec<_> = analysis
+    .spans
+    .iter()
+    .filter(|span| span.changed)
+    .map(|span| (&analysis.output[span.output.clone()], span.rule))
+    .collect();
+assert_eq!(changed, vec![("The", CasingRule::SentenceStart)]);
+
+// Every span maps back to the original bytes you passed in.
+let first = &analysis.spans[0];
+assert_eq!(&input[first.source.clone()], "the");
+```
+
+`span.source` ranges index the raw input you passed in, so keep that string to resolve them — normalization never shifts the offsets. Structural edits are reported too: a collapsed whitespace run or a rewritten subtitle separator (`" - "` → `": "`) surfaces as a `WhitespaceCollapsed` or `SeparatorNormalized` span, so `spans` fully reconstructs the input-to-output diff.
+
 ## More
 
 - runnable examples: [`examples/`](https://github.com/Pajn/textcase/tree/main/crates/textcase/examples)
