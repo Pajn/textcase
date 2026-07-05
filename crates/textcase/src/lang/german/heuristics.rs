@@ -21,16 +21,17 @@ pub fn looks_like_noun_context(
         return true;
     }
 
-    if let Some(prev) = previous {
-        if contexts::ARTICLES.contains(&prev) {
-            return true;
-        }
+    if let Some(prev) = previous
+        && contexts::ARTICLES.contains(&prev)
+    {
+        return true;
     }
 
-    if let (Some(prev), Some(prev2)) = (previous, previous2) {
-        if contexts::PREPOSITIONS.contains(&prev2) && contexts::ARTICLES.contains(&prev) {
-            return true;
-        }
+    if let (Some(prev), Some(prev2)) = (previous, previous2)
+        && contexts::PREPOSITIONS.contains(&prev2)
+        && contexts::ARTICLES.contains(&prev)
+    {
+        return true;
     }
 
     false

@@ -496,7 +496,7 @@ pub fn prepare_source(
 ) -> Result<PreparedLexicon, Box<dyn std::error::Error>> {
     let descriptor = descriptor(source);
     if !descriptor.plugin_kinds.contains(&kind) {
-        return Err(format!("{source} does not support {:?}", kind).into());
+        return Err(format!("{source} does not support {kind:?}").into());
     }
 
     let records = match source {
@@ -538,7 +538,7 @@ pub fn prepare_source(
             display_name: descriptor.display_name.to_string(),
             url: provenance
                 .map(|manifest| manifest.source_url.clone())
-                .unwrap_or_else(|| format!("https://docs.invalid/textcase/sources/{}", source)),
+                .unwrap_or_else(|| format!("https://docs.invalid/textcase/sources/{source}")),
             version: provenance
                 .map(|manifest| manifest.version.clone())
                 .unwrap_or_else(|| "user-supplied".to_string()),

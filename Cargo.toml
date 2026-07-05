@@ -6,10 +6,11 @@ resolver = "2"
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-rust-version = "1.85"
+rust-version = "1.88"
+repository = "https://github.com/Pajn/textcase"
 
 [workspace.dependencies]
-textcase = { path = "crates/textcase" }
+textcase = { path = "crates/textcase", version = "0.1.0" }
 clap = { version = "4.5.39", features = ["cargo", "derive", "wrap_help"] }
 flate2 = "1.1.1"
 fst = "0.4.7"
