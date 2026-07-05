@@ -3,14 +3,14 @@ members = ["crates/textcase", "crates/textcase-cli"]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.88"
 repository = "https://github.com/Pajn/textcase"
 
 [workspace.dependencies]
-textcase = { path = "crates/textcase", version = "0.1.0" }
+textcase = { path = "crates/textcase", version = "0.1.1" }
 clap = { version = "4.5.39", features = ["cargo", "derive", "wrap_help"] }
 flate2 = "1.1.1"
 fst = "0.4.7"
