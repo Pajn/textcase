@@ -120,6 +120,29 @@ fn sentence_case_keeps_leading_contraction() {
 }
 
 #[test]
+fn sentence_case_does_not_split_hyphenated_word() {
+    // Sentence case capitalizes only the first letter of the sentence, so an
+    // intra-word hyphen must not trigger a second capital.
+    assert_eq!(
+        sentence_case("re-enter the code", "en"),
+        "Re-enter the code"
+    );
+    assert_eq!(sentence_case("jean-paul left", "en"), "Jean-paul left");
+}
+
+#[test]
+fn title_case_splits_hyphenated_names() {
+    // Title mode still capitalizes each hyphen-separated part.
+    let options = CaseOptions {
+        locale: "en",
+        mode: CaseMode::Title,
+        ..CaseOptions::default()
+    };
+    assert_eq!(convert("jean-paul sartre", &options), "Jean-Paul Sartre");
+    assert_eq!(convert("coca-cola", &options), "Coca-Cola");
+}
+
+#[test]
 fn title_case_keeps_single_letter_contractions() {
     // A single-letter prefix followed by a contraction tail stays one word,
     // unlike the O'Brien name-particle split above.
