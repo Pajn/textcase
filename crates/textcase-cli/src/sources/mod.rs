@@ -2,6 +2,7 @@ mod dbpedia;
 mod discogs;
 mod geonames;
 mod getty;
+mod gleif;
 mod gnd;
 mod musicbrainz;
 mod openstreetmap;
@@ -28,6 +29,7 @@ pub enum SourceId {
     Wikidata,
     Geonames,
     Discogs,
+    Gleif,
     UdGermanGsd,
     Gnd,
     Orcid,
@@ -44,6 +46,7 @@ impl fmt::Display for SourceId {
             SourceId::Wikidata => "wikidata",
             SourceId::Geonames => "geonames",
             SourceId::Discogs => "discogs",
+            SourceId::Gleif => "gleif",
             SourceId::UdGermanGsd => "ud-german-gsd",
             SourceId::Gnd => "gnd",
             SourceId::Orcid => "orcid",
@@ -130,6 +133,11 @@ const DISCOGS_KINDS: &[PreparedKind] = &[
     PreparedKind::MultiwordMap,
     PreparedKind::ProtectedForms,
 ];
+const GLEIF_KINDS: &[PreparedKind] = &[
+    PreparedKind::CanonicalMap,
+    PreparedKind::MultiwordMap,
+    PreparedKind::ProtectedForms,
+];
 const GETTY_KINDS: &[PreparedKind] = &[PreparedKind::CanonicalMap, PreparedKind::MultiwordMap];
 const WIKTIONARY_KINDS: &[PreparedKind] = &[PreparedKind::WordSet, PreparedKind::RankedCandidates];
 const DBPEDIA_KINDS: &[PreparedKind] = &[PreparedKind::CanonicalMap, PreparedKind::MultiwordMap];
@@ -177,6 +185,20 @@ const DESCRIPTORS: &[SourceDescriptor] = &[
         domain_tags: &["music", "media"],
         docs_anchor: "#discogs",
         purpose: "music artist, label, and release names",
+        bundling_policy: "external plugin only",
+    },
+    SourceDescriptor {
+        id: SourceId::Gleif,
+        display_name: "GLEIF",
+        class: SourceClass::Green,
+        license_name: "CC0",
+        license_summary: "global legal entity names from the LEI system",
+        acknowledgement_flag: None,
+        recommended: true,
+        plugin_kinds: GLEIF_KINDS,
+        domain_tags: &["organizations", "companies"],
+        docs_anchor: "#gleif",
+        purpose: "company and organization legal names",
         bundling_policy: "external plugin only",
     },
     SourceDescriptor {
@@ -331,6 +353,7 @@ pub fn suggested_output_name(source: SourceId, suffix: &str) -> String {
         SourceId::UdGermanGsd => "conllu",
         SourceId::Wiktionary => "jsonl.gz",
         SourceId::Discogs => "xml.gz",
+        SourceId::Gleif => "xml",
         _ => "json",
     };
     format!("{}-{}.{}", source, suffix.to_lowercase(), extension)
@@ -420,6 +443,9 @@ pub fn fetch_guidance(source: SourceId) -> &'static str {
         SourceId::Openstreetmap => {
             "URL-driven; point --url at a Nominatim JSON search scoped to the locality set you need, and acknowledge ODbL"
         }
+        SourceId::Gleif => {
+            "URL-driven; point --url at a GLEIF golden copy or concatenated LEI file (zip, gz, or xml) from gleif.org/en/lei-data"
+        }
         SourceId::Discogs => {
             "URL-driven; point --url at a monthly dump from data.discogs.com, e.g. https://discogs-data-dumps.s3.us-west-2.amazonaws.com/data/2025/discogs_20250601_artists.xml.gz (the URL carries the dump date)"
         }
@@ -437,6 +463,13 @@ pub fn normalize_download(
                 .next()
                 .ok_or("GeoNames fetch returned no payload")?;
             geonames::extract_zip(&archive)
+        }
+        SourceId::Gleif => {
+            let payload = downloads
+                .into_iter()
+                .next()
+                .ok_or("GLEIF fetch returned no payload")?;
+            gleif::extract_payload(&payload)
         }
         SourceId::UdGermanGsd => {
             Ok(downloads
@@ -467,6 +500,7 @@ pub fn validate_source_bytes(
     match source {
         SourceId::Geonames => geonames::validate(bytes),
         SourceId::Discogs => discogs::validate(bytes),
+        SourceId::Gleif => gleif::validate(bytes),
         SourceId::UdGermanGsd => ud_german_gsd::validate(bytes),
         SourceId::Wikidata => {
             wikidata::parse(bytes, None)?;
@@ -510,6 +544,7 @@ pub fn sample_payload(
         SourceId::Wikidata => wikidata::sample(lang),
         SourceId::Geonames => geonames::sample(country),
         SourceId::Discogs => discogs::sample(lang),
+        SourceId::Gleif => gleif::sample(lang),
         SourceId::UdGermanGsd => ud_german_gsd::sample(),
         SourceId::Gnd => gnd::sample(lang),
         SourceId::Orcid => orcid::sample(lang),
@@ -537,6 +572,7 @@ pub fn prepare_source(
         SourceId::Wikidata => wikidata::parse(bytes, lang)?,
         SourceId::Geonames => geonames::parse(bytes)?,
         SourceId::Discogs => discogs::parse(bytes)?,
+        SourceId::Gleif => gleif::parse(bytes)?,
         SourceId::UdGermanGsd => ud_german_gsd::parse(bytes)?,
         SourceId::Gnd => gnd::parse(bytes)?,
         SourceId::Orcid => orcid::parse(bytes)?,

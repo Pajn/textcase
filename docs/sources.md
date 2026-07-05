@@ -18,6 +18,7 @@ textcase lexicon show-license <source> # per-source licensing and setup guidance
 | `orcid` | green | researcher names and affiliations | academic corpora and author lists | URL-driven | `canonical-map`, `multiword-map` | none |
 | `musicbrainz` | green | artists, bands, labels, releases, works | music and media titles | URL-driven | `canonical-map`, `multiword-map`, `protected-forms` | none |
 | `discogs` | green | artists, labels, releases from monthly CC0 dumps | deep music catalog coverage beyond MusicBrainz | URL-driven | `canonical-map`, `multiword-map`, `protected-forms` | none |
+| `gleif` | green | legal entity names from the LEI system | company and organization names with authoritative casing | URL-driven | `canonical-map`, `multiword-map`, `protected-forms` | none |
 | `geonames` | yellow | country- and world-scale gazetteer names | geographic proper nouns | built-in | `canonical-map`, `multiword-map` | none |
 | `getty` | yellow | art, heritage, and museum vocabulary | museums, artworks, styles, places of culture | URL-driven | `canonical-map`, `multiword-map` | none |
 | `wiktionary` | orange | lexical hints, inflected forms, alternate spellings | optional lexical enrichment and German/common-word recovery | built-in | `word-set`, `ranked-candidates` | `--acknowledge-share-alike` |
@@ -129,6 +130,23 @@ textcase lexicon fetch discogs --lang en \
 textcase lexicon prepare discogs --input data/raw/discogs-en.xml.gz \
     --output data/prepared/discogs-artists.json --kind protected-forms --lang en
 ```
+
+### `gleif` (URL-driven, green)
+
+Legal entity names — companies, funds, institutions worldwide — from the CC0 Legal Entity Identifier system, with other and transliterated entity names as aliases (previous legal names are deliberately skipped). The golden copy files are dated; get the current XML zip URL from the publishes API, then fetch it:
+
+```bash
+curl -s "https://goldencopy.gleif.org/api/v2/golden-copies/publishes?format=json&per_page=1" \
+    | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['lei2']['full_file']['xml']['url'])"
+
+textcase lexicon fetch gleif --lang en \
+    --url "https://goldencopy.gleif.org/storage/golden-copy-files/2026/07/05/1247459/20260705-0800-gleif-goldencopy-lei2-golden-copy.xml.zip" \
+    --output-dir data/raw
+textcase lexicon prepare gleif --input data/raw/gleif-en.xml \
+    --output data/prepared/gleif-entities.json --kind protected-forms --lang en
+```
+
+Note the full file is large (roughly 3 GB of XML for ~3.4 million entities); the daily delta files (`.xml.gz`) are a lighter way to experiment.
 
 ### `getty` (URL-driven, yellow)
 
