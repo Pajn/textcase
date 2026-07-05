@@ -223,4 +223,6 @@ textcase lexicon fetch openstreetmap --region DE --acknowledge-odbl \
 - `word-set` — plain "known word" membership checks for lexical sources.
 - `ranked-candidates` — lowercase input maps to scored case candidates; consumed by German aggressive mode.
 
+All map kinds share a rewrite guard: an alias only restores the canonical form when it is a spelling variant of it (casing, diacritics, Germanic transliteration, punctuation). An alias that is a different name — a translation like "Berlim", a trading name like "Volkswagen AG", an inflected form like "Probleme" — restores its own casing instead, and is dropped if it carries none. Conversion recases text; it never substitutes one name for another.
+
 The container formats (`--format json|fst`) are documented in [plugin-format.md](plugin-format.md).
