@@ -9,7 +9,7 @@ use crate::{
     icu::{capitalize_word_locale, lowercase_locale, titlecase_word_locale},
     lang::{german, profile_for_locale},
     lexicon::{builtin_canonical_form, builtin_canonical_phrase},
-    tokenize::{Token, TokenKind, is_sentence_terminal, reconstruct, tokenize},
+    tokenize::{Token, TokenKind, is_abbreviation, is_sentence_terminal, reconstruct, tokenize},
     util::{is_all_caps, is_mixed_case},
 };
 
@@ -30,6 +30,7 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
     }
 
     let profile = profile_for_locale(options.locale);
+    let sentence_boundaries = sentence_boundary_flags(&tokens, options.locale);
     let word_indices: Vec<usize> = tokens
         .iter()
         .enumerate()
@@ -78,7 +79,7 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
                 previous_word = Some(lower);
             }
             TokenKind::Punctuation => {
-                if is_sentence_terminal(&token.text) {
+                if sentence_boundaries[index] {
                     sentence_start = true;
                 }
                 if should_capitalize_after_separator(
@@ -159,6 +160,44 @@ fn recase_word(
     } else {
         lowercase_locale(original, options.locale)
     }
+}
+
+/// Marks which punctuation tokens are true sentence terminals.
+///
+/// A terminal that is immediately followed by an alphanumeric character (the
+/// internal dots of `e.g.` or `3.5`) does not start a new sentence, and a
+/// period directly after an abbreviation or a single-letter initial is skipped
+/// as well.
+fn sentence_boundary_flags(tokens: &[Token], locale: &str) -> Vec<bool> {
+    let mut flags = vec![false; tokens.len()];
+    for index in 0..tokens.len() {
+        let token = &tokens[index];
+        if !matches!(token.kind, TokenKind::Punctuation) || !is_sentence_terminal(&token.text) {
+            continue;
+        }
+
+        let followed_by_alphanumeric = tokens.get(index + 1).is_some_and(|next| {
+            next.text.chars().next().is_some_and(char::is_alphanumeric)
+        });
+        if followed_by_alphanumeric {
+            continue;
+        }
+
+        if token.text == "." && index > 0 && matches!(tokens[index - 1].kind, TokenKind::Word) {
+            let previous = lowercase_locale(&tokens[index - 1].text, locale);
+            if is_abbreviation(&previous) || is_single_letter(&previous) {
+                continue;
+            }
+        }
+
+        flags[index] = true;
+    }
+    flags
+}
+
+fn is_single_letter(word: &str) -> bool {
+    let mut chars = word.chars();
+    matches!((chars.next(), chars.next()), (Some(first), None) if first.is_alphabetic())
 }
 
 fn lookup_word(options: &CaseOptions<'_>, lower: &str) -> Option<String> {
