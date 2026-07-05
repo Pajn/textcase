@@ -1,0 +1,66 @@
+name: release
+
+# Triggered by the `vX.Y.Z` tags that `cargo release` pushes. Publishes both
+# crates to crates.io and uploads prebuilt binaries to the GitHub release so the
+# CLI can be installed with `cargo binstall textcase-cli`.
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
+
+jobs:
+  publish-crates:
+    runs-on: ubuntu-latest
+    permissions:
+      # Required for crates.io Trusted Publishing (OIDC); no stored token.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+      # `textcase` must land in the index before `textcase-cli`, which depends
+      # on it. `cargo publish` blocks until the crate is available, so the second
+      # publish resolves cleanly.
+      - run: cargo publish -p textcase
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+      - run: cargo publish -p textcase-cli
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+  upload-binaries:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    permissions:
+      # Required to create the release and upload assets to it.
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      # Builds the `textcase` binary (using `cross` for the aarch64 Linux
+      # target), packages it as textcase-<target>.tar.gz (.zip on Windows) with
+      # a sha256 sidecar, and creates/uploads to the release for this tag.
+      - uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: textcase
+          target: ${{ matrix.target }}
+          archive: textcase-$target
+          tar: unix
+          zip: windows
+          checksum: sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

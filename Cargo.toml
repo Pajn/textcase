@@ -23,3 +23,10 @@ sha2 = "0.10.8"
 thiserror = "2.0.12"
 unicode-segmentation = "1.12.0"
 zip = { version = "2.2.2", default-features = false, features = ["deflate"] }
+
+# `cargo release <level>` bumps both crates in lockstep, commits, tags `vX.Y.Z`,
+# and pushes. Publishing is left to CI (release.yml), which triggers on the tag.
+[workspace.metadata.release]
+shared-version = true
+tag-name = "v{{version}}"
+publish = false
