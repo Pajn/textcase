@@ -1,3 +1,4 @@
+mod cldr;
 mod dbpedia;
 mod discogs;
 mod geonames;
@@ -32,6 +33,7 @@ pub enum SourceId {
     Discogs,
     Gleif,
     Ror,
+    Cldr,
     UdGermanGsd,
     Gnd,
     Orcid,
@@ -50,6 +52,7 @@ impl fmt::Display for SourceId {
             SourceId::Discogs => "discogs",
             SourceId::Gleif => "gleif",
             SourceId::Ror => "ror",
+            SourceId::Cldr => "cldr",
             SourceId::UdGermanGsd => "ud-german-gsd",
             SourceId::Gnd => "gnd",
             SourceId::Orcid => "orcid",
@@ -141,6 +144,7 @@ const GLEIF_KINDS: &[PreparedKind] = &[
     PreparedKind::MultiwordMap,
     PreparedKind::ProtectedForms,
 ];
+const CLDR_KINDS: &[PreparedKind] = &[PreparedKind::CanonicalMap, PreparedKind::MultiwordMap];
 const ROR_KINDS: &[PreparedKind] = &[PreparedKind::CanonicalMap, PreparedKind::MultiwordMap];
 const GETTY_KINDS: &[PreparedKind] = &[PreparedKind::CanonicalMap, PreparedKind::MultiwordMap];
 const WIKTIONARY_KINDS: &[PreparedKind] = &[PreparedKind::WordSet, PreparedKind::RankedCandidates];
@@ -217,6 +221,20 @@ const DESCRIPTORS: &[SourceDescriptor] = &[
         domain_tags: &["organizations", "research"],
         docs_anchor: "#ror",
         purpose: "research organization and institution names",
+        bundling_policy: "external plugin only",
+    },
+    SourceDescriptor {
+        id: SourceId::Cldr,
+        display_name: "Unicode CLDR",
+        class: SourceClass::Green,
+        license_name: "Unicode License v3",
+        license_summary: "language and territory display names per locale",
+        acknowledgement_flag: None,
+        recommended: true,
+        plugin_kinds: CLDR_KINDS,
+        domain_tags: &["locale", "names", "multilingual"],
+        docs_anchor: "#cldr",
+        purpose: "language, country, and region display names",
         bundling_policy: "external plugin only",
     },
     SourceDescriptor {
@@ -412,6 +430,16 @@ pub fn built_in_fetch_plan(
             version: "r2.13".to_string(),
             output_suffix: "r2.13".to_string(),
         }),
+        SourceId::Cldr => {
+            let lang = lang.ok_or("cldr built-in fetch requires --lang")?;
+            let (source_url, urls) = cldr::built_in_download(lang);
+            Ok(FetchPlan {
+                source_url,
+                urls,
+                version: cldr::CLDR_JSON_VERSION.to_string(),
+                output_suffix: lang.to_ascii_lowercase(),
+            })
+        }
         SourceId::Wiktionary => {
             let lang = lang.ok_or("wiktionary built-in fetch requires --lang")?;
             let (url, version) = wiktionary::built_in_download(lang)?;
@@ -464,6 +492,9 @@ pub fn fetch_guidance(source: SourceId) -> &'static str {
         SourceId::Gleif => {
             "URL-driven; point --url at a GLEIF golden copy or concatenated LEI file (zip, gz, or xml) from gleif.org/en/lei-data"
         }
+        SourceId::Cldr => {
+            "built-in download; requires --lang and fetches that locale's territory and language display names from cldr-json (pinned release)"
+        }
         SourceId::Ror => {
             "URL-driven; point --url at the latest ROR data dump zip from Zenodo (https://doi.org/10.5281/zenodo.6347574)"
         }
@@ -485,6 +516,7 @@ pub fn normalize_download(
                 .ok_or("GeoNames fetch returned no payload")?;
             geonames::extract_zip(&archive)
         }
+        SourceId::Cldr => cldr::merge(downloads),
         SourceId::Ror => {
             let payload = downloads
                 .into_iter()
@@ -530,6 +562,7 @@ pub fn validate_source_bytes(
         SourceId::Discogs => discogs::validate(bytes),
         SourceId::Gleif => gleif::validate(bytes),
         SourceId::Ror => ror::validate(bytes),
+        SourceId::Cldr => cldr::validate(bytes),
         SourceId::UdGermanGsd => ud_german_gsd::validate(bytes),
         SourceId::Wikidata => {
             wikidata::parse(bytes, None)?;
@@ -575,6 +608,7 @@ pub fn sample_payload(
         SourceId::Discogs => discogs::sample(lang),
         SourceId::Gleif => gleif::sample(lang),
         SourceId::Ror => ror::sample(lang),
+        SourceId::Cldr => cldr::sample(lang),
         SourceId::UdGermanGsd => ud_german_gsd::sample(),
         SourceId::Gnd => gnd::sample(lang),
         SourceId::Orcid => orcid::sample(lang),
@@ -604,6 +638,7 @@ pub fn prepare_source(
         SourceId::Discogs => discogs::parse(bytes)?,
         SourceId::Gleif => gleif::parse(bytes)?,
         SourceId::Ror => ror::parse(bytes)?,
+        SourceId::Cldr => cldr::parse(bytes)?,
         SourceId::UdGermanGsd => ud_german_gsd::parse(bytes)?,
         SourceId::Gnd => gnd::parse(bytes)?,
         SourceId::Orcid => orcid::parse(bytes)?,
