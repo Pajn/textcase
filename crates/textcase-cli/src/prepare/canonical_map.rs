@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 
-use crate::{prepare::normalize::normalized_aliases, sources::SourceRecord};
+use crate::{prepare::normalize::lookup_entries, sources::SourceRecord};
 
 pub fn build(records: &[SourceRecord]) -> BTreeMap<String, String> {
     let mut out = BTreeMap::new();
     for record in records {
-        for alias in normalized_aliases(record) {
-            out.insert(alias, record.canonical.clone());
+        for (key, value) in lookup_entries(record) {
+            out.insert(key, value);
         }
     }
     out
