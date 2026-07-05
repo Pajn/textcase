@@ -67,6 +67,30 @@ fn title_case_capitalizes_single_letter_apostrophe_prefix() {
 }
 
 #[test]
+fn sentence_case_does_not_split_on_abbreviations() {
+    assert_eq!(
+        sentence_case("visit dr. smith e.g. tomorrow please", "en"),
+        "Visit dr. smith e.g. tomorrow please"
+    );
+}
+
+#[test]
+fn sentence_case_splits_on_real_terminals() {
+    assert_eq!(
+        sentence_case("the show ended. everyone left", "en"),
+        "The show ended. Everyone left"
+    );
+}
+
+#[test]
+fn sentence_case_ignores_decimal_points() {
+    assert_eq!(
+        sentence_case("version 3.5 is ready", "en"),
+        "Version 3.5 is ready"
+    );
+}
+
+#[test]
 fn sentence_title_capitalizes_after_subtitle_separator() {
     let options = CaseOptions {
         locale: "en",
