@@ -1,15 +1,15 @@
-# Source setup guide
+# Source catalog and setup guide
 
-`textcase` keeps source setup explicit on purpose: every plugin should have a clear origin, a clear license story, and a workflow that a new user can follow without reading the implementation.
+Every plugin should have a clear origin, a clear license story, and a workflow a new user can follow without reading the implementation. This guide covers all ten supported sources; the CLI pipeline itself (fetch → prepare → build-plugin) is explained in the [CLI README](../crates/textcase-cli/README.md).
 
-There are two fetch styles:
+Two commands answer most questions interactively:
 
-- **Built-in workflows** for sources with stable, dataset-like upstream downloads.
-- **URL-driven workflows** for query-oriented APIs where the right corpus depends on your project.
+```bash
+textcase lexicon list-sources          # the catalog with license classes
+textcase lexicon show-license <source> # per-source licensing and setup guidance
+```
 
-Run `textcase lexicon list-sources` to see the full catalog, then `textcase lexicon show-license <source>` for the exact acknowledgement and setup guidance for one source.
-
-## Which source should I pick?
+## 1. Choose a source
 
 | source | class | what it gives you | best first use | fetch mode | prepare kinds | acknowledgement |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -24,196 +24,134 @@ Run `textcase lexicon list-sources` to see the full catalog, then `textcase lexi
 | `openstreetmap` | orange | locality, street, and venue names | street-level and locality-heavy text | URL-driven | `canonical-map`, `multiword-map` | `--acknowledge-odbl` |
 | `ud-german-gsd` | orange | ranked candidate hints from real German syntax data | German aggressive mode | built-in | `ranked-candidates` | `--acknowledge-cc-by-sa` |
 
-## Recommended starter stacks
+Starter stacks for common needs:
 
-### Clean proper nouns
+- **Clean proper nouns** — `wikidata`, `gnd`, `orcid`, and `musicbrainz`: the cleanest redistribution story with the highest-value coverage.
+- **Place names** — `geonames` first for city, region, and country names; add `openstreetmap` only when you need street-level or POI coverage and can absorb ODbL obligations.
+- **German enrichment** — `gnd` for proper nouns, `wiktionary` for lexical hints, `ud-german-gsd` for ranked candidates in aggressive German mode.
 
-Use `wikidata`, `gnd`, `orcid`, and `musicbrainz` when you want the cleanest redistribution story and the highest-value proper-noun coverage.
+## 2. Check the license
 
-### Place names
+Classes describe the redistribution story, enforced by the CLI:
 
-Use `geonames` first for city, region, and country names. Add `openstreetmap` only when you need street-level or local POI coverage and you are prepared for ODbL obligations.
+- `green`: clean redistribution; safest default for redistribution-heavy products.
+- `yellow`: practical, but plan for attribution-aware deployment.
+- `orange`: stronger obligations (share-alike, ODbL, CC BY-SA); strictly opt-in. `fetch` and `prepare` refuse to run without the source's acknowledgement flag, and the obligation is recorded in the plugin metadata.
 
-### German enrichment
+The reasoning behind the classes is in [licensing-policy.md](licensing-policy.md); `show-license <source>` prints the specifics.
 
-Use `gnd` for proper nouns, `wiktionary` for lexical hints, and `ud-german-gsd` for ranked candidates in aggressive German mode.
+## 3. Fetch and prepare
 
-## Built-in workflows
+There are two fetch styles:
 
-These sources can be fetched directly without a custom URL.
+- **Built-in workflows** (`geonames`, `wiktionary`, `ud-german-gsd`): the upstream is a stable, dataset-like download, so the CLI knows how to get it.
+- **URL-driven workflows** (everything else): the upstream is a query-oriented API and the right corpus depends on your project, so you pass the exact slice with `--url`. The CLI still validates the payload and records provenance in the raw sidecar manifest.
 
-### `geonames`
+Each source below follows the same template: what it provides, when to use it, and the commands.
 
-**Why use it:** strong general-purpose place-name coverage with stable, country-scoped downloads.
+### `geonames` (built-in, yellow)
 
-**What it provides:** canonical place names, alternate names, and broad geographic coverage.
-
-**Fetch:**
-
-```bash
-textcase lexicon fetch geonames --country DE --output-dir data/raw
-```
-
-Omit `--country` to fetch the global `allCountries` dump.
-
-**Prepare:**
+Canonical place names, alternate names, and broad geographic coverage with stable country-scoped downloads. The strongest general-purpose place-name source.
 
 ```bash
-textcase lexicon prepare geonames --input data/raw/geonames-de.tsv --output data/prepared/geonames-de.json --kind canonical-map --lang de
+textcase lexicon fetch geonames --country DE --output-dir data/raw   # omit --country for the global dump
+textcase lexicon prepare geonames --input data/raw/geonames-de.tsv \
+    --output data/prepared/geonames-de.json --kind canonical-map --lang de
 ```
 
-### `wiktionary`
+### `wiktionary` (built-in, orange)
 
-**Why use it:** useful when you need lexical hints, inflected forms, or optional candidate enrichment beyond proper nouns.
-
-**What it provides:** language-specific surface forms from Kaikki/Wiktextract-backed Wiktionary exports. `textcase` treats Wiktionary as an opt-in lexical source, not a default proper-noun authority.
-
-**Built-in editions:** `de`, `es`, `fr`, `it`, `nl`, `pl`, `pt`, `tr`, `cs`, and `en`.
-
-**Fetch:**
+Language-specific surface forms from Kaikki/Wiktextract-backed Wiktionary exports: lexical hints, inflected forms, alternate spellings. An opt-in lexical source, not a default proper-noun authority. Built-in editions: `de`, `es`, `fr`, `it`, `nl`, `pl`, `pt`, `tr`, `cs`, and `en`.
 
 ```bash
 textcase lexicon fetch wiktionary --lang de --acknowledge-share-alike --output-dir data/raw
+textcase lexicon prepare wiktionary --input data/raw/wiktionary-de.jsonl.gz \
+    --output data/prepared/wiktionary-de.json --kind word-set --lang de --acknowledge-share-alike
 ```
 
-**Prepare:**
+Prepare with `--kind ranked-candidates` instead when you want candidate scoring rather than a plain lexical set.
 
-```bash
-textcase lexicon prepare wiktionary --input data/raw/wiktionary-de.jsonl.gz --output data/prepared/wiktionary-de.json --kind word-set --lang de --acknowledge-share-alike
-```
+### `ud-german-gsd` (built-in, orange)
 
-Use `ranked-candidates` when you want candidate scoring rather than a plain lexical set.
-
-### `ud-german-gsd`
-
-**Why use it:** optional ranking data for German aggressive mode.
-
-**What it provides:** noun and proper-noun candidate scoring derived from the UD German GSD treebank.
-
-**Fetch:**
+Noun and proper-noun candidate scoring derived from the UD German GSD treebank. Exists for one purpose: feeding German aggressive mode with ranked candidates (see [german.md](german.md)).
 
 ```bash
 textcase lexicon fetch ud-german-gsd --acknowledge-cc-by-sa --output-dir data/raw
+textcase lexicon prepare ud-german-gsd --input data/raw/ud-german-gsd-r2.13.conllu \
+    --output data/prepared/ud-german-gsd.json --kind ranked-candidates --lang de --acknowledge-cc-by-sa
 ```
 
-**Prepare:**
+### `wikidata` (URL-driven, green)
+
+Entity labels and aliases — people, organizations, places, products, notable works — with a clean CC0 story. The broadest multilingual coverage of any source here. Use `Special:EntityData/<QID>.json` exports, or generate a curated JSON file containing an `entities` map.
 
 ```bash
-textcase lexicon prepare ud-german-gsd --input data/raw/ud-german-gsd-r2.13.conllu --output data/prepared/ud-german-gsd.json --kind ranked-candidates --lang de --acknowledge-cc-by-sa
+textcase lexicon fetch wikidata --lang en \
+    --url "https://www.wikidata.org/wiki/Special:EntityData/Q64.json" --output-dir data/raw
 ```
 
-## URL-driven workflows
+### `gnd` (URL-driven, green)
 
-These sources are intentionally URL-driven because the right upstream slice depends on your domain. The CLI still validates the fetched payload and records source provenance in the raw sidecar manifest.
-
-### `wikidata`
-
-**Why use it:** broad multilingual proper-noun coverage with a clean CC0 story.
-
-**What it provides:** entity labels and aliases, especially for people, organizations, places, products, and notable works.
-
-**Find a URL:** use Wikidata entity exports such as `Special:EntityData/<QID>.json`, or generate a curated JSON file containing an `entities` map.
-
-**Example:**
+Preferred names, variant names, and structured person/place/work authority records. Authority-grade quality, especially valuable for German and European corpora. Use the Lobid GND API; single records and search result feeds both work.
 
 ```bash
-textcase lexicon fetch wikidata --lang en --url "https://www.wikidata.org/wiki/Special:EntityData/Q64.json" --output-dir data/raw
+textcase lexicon fetch gnd --lang de \
+    --url "https://lobid.org/gnd/search?q=Goethe&format=json" --output-dir data/raw
 ```
 
-### `gnd`
+### `orcid` (URL-driven, green)
 
-**Why use it:** authority-grade names with especially good value for German and European corpora.
-
-**What it provides:** preferred names, variant names, and structured person/place/work authority records.
-
-**Find a URL:** use the Lobid GND API. Single records and search result feeds are both supported.
-
-**Example:**
+Researcher names and affiliation-style person metadata from the public ORCID API. Excellent for curated academic name lists. Use the personal-details endpoints for the researcher set you care about.
 
 ```bash
-textcase lexicon fetch gnd --lang de --url "https://lobid.org/gnd/search?q=Goethe&format=json" --output-dir data/raw
+textcase lexicon fetch orcid --lang en \
+    --url "https://pub.orcid.org/v3.0/0000-0002-1825-0097/personal-details" --output-dir data/raw
 ```
 
-### `orcid`
+### `musicbrainz` (URL-driven, green)
 
-**Why use it:** excellent for curated academic name lists.
-
-**What it provides:** researcher names and affiliation-style person metadata from the public ORCID API.
-
-**Find a URL:** use ORCID public API personal-details endpoints for the researcher set you care about.
-
-**Example:**
+Artist, release, work, and recording names from MusicBrainz search results or single entities. The strongest source in this catalog for music, artists, labels, and release titles. Use the `ws/2` endpoints with `fmt=json`.
 
 ```bash
-textcase lexicon fetch orcid --lang en --url "https://pub.orcid.org/v3.0/0000-0002-1825-0097/personal-details" --output-dir data/raw
+textcase lexicon fetch musicbrainz --lang en \
+    --url "https://musicbrainz.org/ws/2/artist?query=artist:Kraftwerk&fmt=json" --output-dir data/raw
 ```
 
-### `musicbrainz`
+### `getty` (URL-driven, yellow)
 
-**Why use it:** the strongest source in this crate for music, artists, labels, and release titles.
-
-**What it provides:** artist, release, work, and recording names from MusicBrainz search results or single entities.
-
-**Find a URL:** use the MusicBrainz `ws/2` endpoints with `fmt=json`.
-
-**Example:**
+Labels and identifying strings from Getty linked-art records. Ideal for museums, heritage terms, art styles, and cultural place names. Open an AAT, TGN, or other Getty vocabulary record and use its linked-art JSON representation.
 
 ```bash
-textcase lexicon fetch musicbrainz --lang en --url "https://musicbrainz.org/ws/2/artist?query=artist:Kraftwerk&fmt=json" --output-dir data/raw
+textcase lexicon fetch getty --lang en \
+    --url "https://vocab.getty.edu/aat/300033618.json" --output-dir data/raw
 ```
 
-### `getty`
+### `dbpedia` (URL-driven, orange)
 
-**Why use it:** ideal for museums, heritage terms, art styles, and cultural place names.
-
-**What it provides:** labels and identifying strings from Getty linked-art records.
-
-**Find a URL:** open an AAT, TGN, or other Getty vocabulary record and use its linked-art JSON representation.
-
-**Example:**
+Labels and redirects from DBpedia lookup results or resource graphs. Optional broad entity coverage when share-alike obligations are acceptable. Use the DBpedia Lookup API or a resource JSON response.
 
 ```bash
-textcase lexicon fetch getty --lang en --url "https://vocab.getty.edu/aat/300033618.json" --output-dir data/raw
+textcase lexicon fetch dbpedia --lang en --acknowledge-share-alike \
+    --url "https://lookup.dbpedia.org/api/search?query=Berlin&format=json" --output-dir data/raw
 ```
 
-### `dbpedia`
+### `openstreetmap` (URL-driven, orange)
 
-**Why use it:** optional broad entity coverage when share-alike obligations are acceptable.
-
-**What it provides:** labels and redirects from DBpedia lookup results or resource graphs.
-
-**Find a URL:** use the DBpedia Lookup API or a DBpedia resource JSON response.
-
-**Example:**
+Place, street, and namedetail strings from Nominatim JSON results. Best when you need street-level or hyperlocal names GeoNames does not cover. Use a Nominatim search URL scoped to the area and result type you actually need.
 
 ```bash
-textcase lexicon fetch dbpedia --lang en --acknowledge-share-alike --url "https://lookup.dbpedia.org/api/search?query=Berlin&format=json" --output-dir data/raw
+textcase lexicon fetch openstreetmap --region DE --acknowledge-odbl \
+    --url "https://nominatim.openstreetmap.org/search?format=jsonv2&q=Berlin&namedetails=1" --output-dir data/raw
 ```
 
-### `openstreetmap`
+## 4. Pick the prepare kind
 
-**Why use it:** best when you need street-level or hyperlocal names that GeoNames does not cover.
+`prepare --kind` decides what the plugin can do at runtime:
 
-**What it provides:** place, street, and namedetail strings from Nominatim JSON results.
+- `canonical-map` — exact restoration of known proper nouns (`github` → `GitHub`).
+- `multiword-map` — the same for multi-token names (`new york` → `New York`); use when your source is rich in them.
+- `protected-forms` — exact-casing preservation for sources like `gnd` and `musicbrainz` where the recorded form is authoritative.
+- `word-set` — plain "known word" membership checks for lexical sources.
+- `ranked-candidates` — lowercase input maps to scored case candidates; consumed by German aggressive mode.
 
-**Find a URL:** use a Nominatim search URL scoped to the area and result type you actually need.
-
-**Example:**
-
-```bash
-textcase lexicon fetch openstreetmap --region DE --acknowledge-odbl --url "https://nominatim.openstreetmap.org/search?format=jsonv2&q=Berlin&namedetails=1" --output-dir data/raw
-```
-
-## Picking the right plugin kind
-
-- Use `canonical-map` for exact restoration of known proper nouns.
-- Use `multiword-map` when your source contains many multi-token names.
-- Use `protected-forms` for sources like `gnd` and `musicbrainz` where preserving exact casing matters.
-- Use `word-set` for lexical “known word” membership checks.
-- Use `ranked-candidates` when you want lowercase input to map to scored case candidates.
-
-## Licensing summary
-
-- `green` sources are the safest defaults for redistribution-heavy products.
-- `yellow` sources are practical but need attribution-aware deployment.
-- `orange` sources are strictly opt-in and should be enabled only when your deployment and licensing model can absorb their obligations.
+The container formats (`--format json|fst`) are documented in [plugin-format.md](plugin-format.md).
