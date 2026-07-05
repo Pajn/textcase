@@ -52,7 +52,7 @@ fn match_separator(chars: &[char], index: usize) -> Option<usize> {
         && matches!(chars.get(index + 1), Some('—' | '–' | '-' | ':'))
         && chars.get(index + 2) == Some(&' ')
     {
-        return valid_context(prev_char(chars, index), chars.get(index + 3).copied()).then_some(3);
+        return valid_context(chars, index.wrapping_sub(1), index + 3).then_some(3);
     }
 
     // ": ": colon, space — only when not already covered by the spaced form
@@ -61,7 +61,7 @@ fn match_separator(chars: &[char], index: usize) -> Option<usize> {
         && chars.get(index + 1) == Some(&' ')
         && prev_char(chars, index) != Some(' ')
     {
-        return valid_context(prev_char(chars, index), chars.get(index + 2).copied()).then_some(2);
+        return valid_context(chars, index.wrapping_sub(1), index + 2).then_some(2);
     }
 
     None
@@ -72,13 +72,23 @@ fn prev_char(chars: &[char], index: usize) -> Option<char> {
 }
 
 /// A separator only splits a title when both sides carry word content, and not
-/// when both sides are digits (a numeric range such as `3 - 5`).
-fn valid_context(prev: Option<char>, next: Option<char>) -> bool {
-    let (Some(prev), Some(next)) = (prev, next) else {
+/// when the flanking words form a range: two numbers (`3 - 5`, `10 - 20`) or
+/// two single characters (`a - z`).
+fn valid_context(chars: &[char], prev_index: usize, next_index: usize) -> bool {
+    let (Some(&prev), Some(&next)) = (chars.get(prev_index), chars.get(next_index)) else {
         return false;
     };
     if !prev.is_alphanumeric() || !next.is_alphanumeric() {
         return false;
     }
-    !(prev.is_ascii_digit() && next.is_ascii_digit())
+    if prev.is_ascii_digit() && next.is_ascii_digit() {
+        return false;
+    }
+    let prev_is_single = !chars
+        .get(prev_index.wrapping_sub(1))
+        .is_some_and(|ch| ch.is_alphanumeric());
+    let next_is_single = !chars
+        .get(next_index + 1)
+        .is_some_and(|ch| ch.is_alphanumeric());
+    !(prev_is_single && next_is_single)
 }
