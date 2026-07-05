@@ -21,6 +21,7 @@ textcase lexicon show-license <source> # per-source licensing and setup guidance
 | `gleif` | green | legal entity names from the LEI system | company and organization names with authoritative casing | URL-driven | `canonical-map`, `multiword-map`, `protected-forms` | none |
 | `ror` | green | research organization names | universities, institutes, and labs in academic corpora | URL-driven | `canonical-map`, `multiword-map` | none |
 | `cldr` | green | language, country, and region display names per locale | high-frequency vocabulary ("french", "united kingdom") in any supported locale | built-in | `canonical-map`, `multiword-map` | none |
+| `natural-earth` | green | world-scale country and city names, public domain | coarse geography without any attribution obligations | built-in | `canonical-map`, `multiword-map` | none |
 | `geonames` | yellow | country- and world-scale gazetteer names | geographic proper nouns | built-in | `canonical-map`, `multiword-map` | none |
 | `getty` | yellow | art, heritage, and museum vocabulary | museums, artworks, styles, places of culture | URL-driven | `canonical-map`, `multiword-map` | none |
 | `wiktionary` | orange | lexical hints, inflected forms, alternate spellings | optional lexical enrichment and German/common-word recovery | built-in | `word-set`, `ranked-candidates` | `--acknowledge-share-alike` |
@@ -83,6 +84,16 @@ Language, country, and region display names for one locale from the Unicode CLDR
 textcase lexicon fetch cldr --lang de --output-dir data/raw
 textcase lexicon prepare cldr --input data/raw/cldr-de.json \
     --output data/prepared/cldr-de.json --kind canonical-map --lang de
+```
+
+### `natural-earth` (built-in, green)
+
+World countries and populated places from Natural Earth, which is public domain — the no-obligations alternative when GeoNames' attribution guidance is more than you want to manage and coarse coverage (countries plus ~7,000 cities) is enough. The download is pinned to a Natural Earth release and takes no arguments.
+
+```bash
+textcase lexicon fetch natural-earth --output-dir data/raw
+textcase lexicon prepare natural-earth --input data/raw/natural-earth-world.geojson \
+    --output data/prepared/natural-earth.json --kind multiword-map --lang en
 ```
 
 ### `ud-german-gsd` (built-in, orange)
