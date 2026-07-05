@@ -397,6 +397,21 @@ fn german_balanced_mode_recovers_common_noun_context() {
 }
 
 #[test]
+fn german_balanced_mode_does_not_carry_article_across_punctuation() {
+    let balanced = CaseOptions {
+        locale: "de",
+        german_mode: GermanMode::Balanced,
+        ..CaseOptions::default()
+    };
+    // "der" is an article, but the comma ends the phrase, so the adverb
+    // "gestern" must not be capitalized as if it were the article's noun.
+    assert_eq!(
+        convert("der, gestern kamen wir", &balanced),
+        "Der, gestern kamen wir"
+    );
+}
+
+#[test]
 fn german_aggressive_mode_uses_ranked_candidates() {
     let prepared = PreparedLexicon {
         name: "de-ranked".to_string(),
