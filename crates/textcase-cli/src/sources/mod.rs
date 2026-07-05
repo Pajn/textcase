@@ -7,6 +7,7 @@ mod gnd;
 mod musicbrainz;
 mod openstreetmap;
 mod orcid;
+mod ror;
 mod ud_german_gsd;
 mod wikidata;
 mod wiktionary;
@@ -30,6 +31,7 @@ pub enum SourceId {
     Geonames,
     Discogs,
     Gleif,
+    Ror,
     UdGermanGsd,
     Gnd,
     Orcid,
@@ -47,6 +49,7 @@ impl fmt::Display for SourceId {
             SourceId::Geonames => "geonames",
             SourceId::Discogs => "discogs",
             SourceId::Gleif => "gleif",
+            SourceId::Ror => "ror",
             SourceId::UdGermanGsd => "ud-german-gsd",
             SourceId::Gnd => "gnd",
             SourceId::Orcid => "orcid",
@@ -138,6 +141,7 @@ const GLEIF_KINDS: &[PreparedKind] = &[
     PreparedKind::MultiwordMap,
     PreparedKind::ProtectedForms,
 ];
+const ROR_KINDS: &[PreparedKind] = &[PreparedKind::CanonicalMap, PreparedKind::MultiwordMap];
 const GETTY_KINDS: &[PreparedKind] = &[PreparedKind::CanonicalMap, PreparedKind::MultiwordMap];
 const WIKTIONARY_KINDS: &[PreparedKind] = &[PreparedKind::WordSet, PreparedKind::RankedCandidates];
 const DBPEDIA_KINDS: &[PreparedKind] = &[PreparedKind::CanonicalMap, PreparedKind::MultiwordMap];
@@ -199,6 +203,20 @@ const DESCRIPTORS: &[SourceDescriptor] = &[
         domain_tags: &["organizations", "companies"],
         docs_anchor: "#gleif",
         purpose: "company and organization legal names",
+        bundling_policy: "external plugin only",
+    },
+    SourceDescriptor {
+        id: SourceId::Ror,
+        display_name: "ROR",
+        class: SourceClass::Green,
+        license_name: "CC0",
+        license_summary: "research organization names from the ROR registry",
+        acknowledgement_flag: None,
+        recommended: true,
+        plugin_kinds: ROR_KINDS,
+        domain_tags: &["organizations", "research"],
+        docs_anchor: "#ror",
+        purpose: "research organization and institution names",
         bundling_policy: "external plugin only",
     },
     SourceDescriptor {
@@ -446,6 +464,9 @@ pub fn fetch_guidance(source: SourceId) -> &'static str {
         SourceId::Gleif => {
             "URL-driven; point --url at a GLEIF golden copy or concatenated LEI file (zip, gz, or xml) from gleif.org/en/lei-data"
         }
+        SourceId::Ror => {
+            "URL-driven; point --url at the latest ROR data dump zip from Zenodo (https://doi.org/10.5281/zenodo.6347574)"
+        }
         SourceId::Discogs => {
             "URL-driven; point --url at a monthly dump from data.discogs.com, e.g. https://discogs-data-dumps.s3.us-west-2.amazonaws.com/data/2025/discogs_20250601_artists.xml.gz (the URL carries the dump date)"
         }
@@ -463,6 +484,13 @@ pub fn normalize_download(
                 .next()
                 .ok_or("GeoNames fetch returned no payload")?;
             geonames::extract_zip(&archive)
+        }
+        SourceId::Ror => {
+            let payload = downloads
+                .into_iter()
+                .next()
+                .ok_or("ROR fetch returned no payload")?;
+            ror::extract_payload(&payload)
         }
         SourceId::Gleif => {
             let payload = downloads
@@ -501,6 +529,7 @@ pub fn validate_source_bytes(
         SourceId::Geonames => geonames::validate(bytes),
         SourceId::Discogs => discogs::validate(bytes),
         SourceId::Gleif => gleif::validate(bytes),
+        SourceId::Ror => ror::validate(bytes),
         SourceId::UdGermanGsd => ud_german_gsd::validate(bytes),
         SourceId::Wikidata => {
             wikidata::parse(bytes, None)?;
@@ -545,6 +574,7 @@ pub fn sample_payload(
         SourceId::Geonames => geonames::sample(country),
         SourceId::Discogs => discogs::sample(lang),
         SourceId::Gleif => gleif::sample(lang),
+        SourceId::Ror => ror::sample(lang),
         SourceId::UdGermanGsd => ud_german_gsd::sample(),
         SourceId::Gnd => gnd::sample(lang),
         SourceId::Orcid => orcid::sample(lang),
@@ -573,6 +603,7 @@ pub fn prepare_source(
         SourceId::Geonames => geonames::parse(bytes)?,
         SourceId::Discogs => discogs::parse(bytes)?,
         SourceId::Gleif => gleif::parse(bytes)?,
+        SourceId::Ror => ror::parse(bytes)?,
         SourceId::UdGermanGsd => ud_german_gsd::parse(bytes)?,
         SourceId::Gnd => gnd::parse(bytes)?,
         SourceId::Orcid => orcid::parse(bytes)?,
