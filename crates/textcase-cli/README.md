@@ -71,9 +71,9 @@ let plugins = textcase::PluginSet::from_fst_path("data/plugins/geonames-de.tclx"
 
 ## Sources and licensing
 
-Sources are classed by their redistribution story — `green` (clean: `wikidata`, `gnd`, `orcid`, `musicbrainz`), `yellow` (attribution guidance: `geonames`, `getty`), and `orange` (stronger obligations, strictly opt-in: `wiktionary`, `dbpedia`, `openstreetmap`, `ud-german-gsd`). Orange sources refuse to fetch or prepare until you pass their acknowledgement flag (`--acknowledge-share-alike`, `--acknowledge-odbl`, or `--acknowledge-cc-by-sa`), and the obligation is recorded in the plugin metadata.
+Sources are classed by their redistribution story — `green` (clean: `wikidata`, `gnd`, `orcid`, `musicbrainz`, `discogs`, `gleif`, `ror`, `cldr`, `natural-earth`), `yellow` (attribution guidance: `geonames`, `getty`), and `orange` (stronger obligations, strictly opt-in: `wiktionary`, `dbpedia`, `openstreetmap`, `ud-german-gsd`). Orange sources refuse to fetch or prepare until you pass their acknowledgement flag (`--acknowledge-share-alike`, `--acknowledge-odbl`, or `--acknowledge-cc-by-sa`), and the obligation is recorded in the plugin metadata.
 
-`fetch` has built-in workflows for `geonames`, `wiktionary`, and `ud-german-gsd`, which have stable dataset-style downloads. The other sources are query-oriented APIs, so you pass the exact upstream slice you want with `--url`.
+`fetch` has built-in workflows for `geonames`, `cldr`, `natural-earth`, `wiktionary`, and `ud-german-gsd`, which have stable dataset-style downloads. The other sources are query-oriented APIs or dated dumps, so you pass the exact upstream slice you want with `--url`.
 
 **[docs/sources.md](https://github.com/Pajn/textcase/blob/main/docs/sources.md) is the full catalog** — what each source provides, when to use it, which `--kind` to prepare, and a copy-pasteable command sequence per source. Related reading:
 
