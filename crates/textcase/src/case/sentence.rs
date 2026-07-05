@@ -16,7 +16,7 @@ use crate::{
         AbbreviationKind, Token, TokenKind, abbreviation_kind, is_sentence_terminal,
         is_wide_sentence_terminal, reconstruct, tokenize,
     },
-    util::{is_acronym_candidate, is_mixed_case, is_shouting},
+    util::{is_acronym_candidate, is_mixed_case},
 };
 
 #[derive(Clone, Copy)]
@@ -36,11 +36,13 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
     }
 
     let profile = profile_for_locale(options.locale);
-    // When the entire input is capitalized it is a shouting title, not a
-    // sequence of acronyms, so acronym preservation must not block conversion.
-    let shouting = is_shouting(&prepared);
     let sentence_boundaries = sentence_boundary_flags(&tokens, options.locale);
     let subtitle_separators = subtitle_separator_flags(&tokens);
+    // When a whole sentence is capitalized it is a shouted title, not a
+    // sequence of acronyms, so acronym preservation must not block conversion.
+    let sentence_ids = token_sentence_ids(&sentence_boundaries);
+    let sentence_shouting =
+        sentence_shouting_flags(&tokens, &sentence_ids, profile, options.locale);
     let word_indices: Vec<usize> = tokens
         .iter()
         .enumerate()
@@ -90,7 +92,7 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
                 token.text = if let Some(Some(canonical)) = canonical {
                     canonical
                 } else if (options.preserve_acronyms
-                    && !shouting
+                    && !sentence_shouting[sentence_ids[index]]
                     && is_acronym_candidate(&original))
                     || (options.preserve_mixed_case && is_mixed_case(&original))
                 {
@@ -268,6 +270,69 @@ fn sentence_boundary_flags(tokens: &[Token], locale: &str) -> Vec<bool> {
         flags[index] = true;
     }
     flags
+}
+
+/// Assigns each token the index of the sentence it belongs to; a boundary
+/// terminal closes its own sentence.
+fn token_sentence_ids(boundaries: &[bool]) -> Vec<usize> {
+    let mut ids = Vec::with_capacity(boundaries.len());
+    let mut current = 0;
+    for &boundary in boundaries {
+        ids.push(current);
+        if boundary {
+            current += 1;
+        }
+    }
+    ids
+}
+
+/// Whether each sentence is written in capitals (a shouted title) rather than
+/// containing isolated acronyms.
+///
+/// A sentence is shouting when every word is all-caps, or when the only
+/// lowercase words are stop words and at least one all-caps word has five or
+/// more letters. That converts "NEW YORK vs THE WORLD" while keeping the short
+/// all-caps words of "USA vs USSR" as acronyms.
+fn sentence_shouting_flags(
+    tokens: &[Token],
+    sentence_ids: &[usize],
+    profile: crate::lang::LanguageProfile,
+    locale: &str,
+) -> Vec<bool> {
+    let sentence_count = sentence_ids.last().map_or(0, |last| last + 1);
+    let mut all_caps = vec![true; sentence_count];
+    let mut caps_or_stop_word = vec![true; sentence_count];
+    let mut has_caps_word = vec![false; sentence_count];
+    let mut has_long_caps_word = vec![false; sentence_count];
+
+    for (index, token) in tokens.iter().enumerate() {
+        if !token.is_word() || !token.text.chars().any(char::is_alphabetic) {
+            continue;
+        }
+        let id = sentence_ids[index];
+        let word_is_all_caps = !token.text.chars().any(char::is_lowercase);
+        if word_is_all_caps {
+            has_caps_word[id] = true;
+            let letters = token.text.chars().filter(|ch| ch.is_alphabetic()).count();
+            if letters >= 5 {
+                has_long_caps_word[id] = true;
+            }
+        } else {
+            all_caps[id] = false;
+            let lower = lowercase_locale(&token.text, locale);
+            if !profile.keeps_lowercase_in_title(&lower)
+                && !profile.keeps_particle_lowercase(&lower)
+            {
+                caps_or_stop_word[id] = false;
+            }
+        }
+    }
+
+    (0..sentence_count)
+        .map(|id| {
+            has_caps_word[id] && (all_caps[id] || (caps_or_stop_word[id] && has_long_caps_word[id]))
+        })
+        .collect()
 }
 
 /// A period that belongs to a `..`/`...` run is ellipsis punctuation, not a
