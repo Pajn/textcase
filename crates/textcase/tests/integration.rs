@@ -14,6 +14,31 @@ use textcase::{
 };
 
 #[test]
+fn dutch_titlecases_ij_digraph() {
+    // ICU applies the Dutch "IJ" rule for the nl locale...
+    assert_eq!(
+        sentence_case("ijsselmeer is a lake", "nl"),
+        "IJsselmeer is a lake"
+    );
+    // ...but not for other locales.
+    assert_eq!(
+        sentence_case("ijsselmeer is a lake", "en"),
+        "Ijsselmeer is a lake"
+    );
+}
+
+#[test]
+fn turkish_uses_dotted_capital_i() {
+    assert_eq!(sentence_case("istanbul", "tr"), "İstanbul");
+    assert_eq!(sentence_case("ışık parlak", "tr"), "Işık parlak");
+}
+
+#[test]
+fn greek_lowercases_to_final_sigma() {
+    assert_eq!(sentence_case("ΤΟ ΟΔΟΣ", "el"), "Το οδος");
+}
+
+#[test]
 fn sentence_case_normalizes_basic_english() {
     assert_eq!(
         sentence_case("the rise of github in berlin", "en"),
