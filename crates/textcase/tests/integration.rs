@@ -105,6 +105,20 @@ fn sentence_case_preserves_acronyms_in_mixed_text() {
 }
 
 #[test]
+fn sentence_case_lexicon_overrides_all_caps() {
+    // A known canonical form wins over acronym preservation...
+    assert_eq!(sentence_case("the GITHUB repo", "en"), "The GitHub repo");
+    // ...while an all-caps word absent from the lexicon stays preserved.
+    assert_eq!(sentence_case("the NASA probe", "en"), "The NASA probe");
+}
+
+#[test]
+fn sentence_case_all_caps_phrase_canonicalizes() {
+    // Same precedence for multi-word canonical forms.
+    assert_eq!(sentence_case("NEW YORK is big", "en"), "New York is big");
+}
+
+#[test]
 fn sentence_case_recases_stray_single_capital() {
     assert_eq!(sentence_case("buy A dog", "en"), "Buy a dog");
 }
