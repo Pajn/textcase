@@ -2,8 +2,8 @@ use std::collections::HashSet;
 
 use crate::{
     case::{
-        mode_is_sentence_like, mode_is_title, prepare_input, should_capitalize_after_separator,
-        should_keep_lowercase_in_title,
+        mode_capitalizes_after_subtitle, mode_is_sentence_like, mode_is_title, prepare_input,
+        should_capitalize_after_separator, should_keep_lowercase_in_title,
     },
     config::{CaseMode, CaseOptions},
     icu::{
@@ -61,7 +61,9 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
                 let original = token.text.clone();
                 let lower = lowercase_locale(&original, options.locale);
                 let at_sentence_cap = sentence_start
-                    || (after_subtitle && options.capitalize_after_subtitle_separator);
+                    || (after_subtitle
+                        && options.capitalize_after_subtitle_separator
+                        && mode_capitalizes_after_subtitle(options.mode));
                 if at_sentence_cap {
                     sentence_start_words.insert(index);
                 }

@@ -109,6 +109,29 @@ fn sentence_case_recases_stray_single_capital() {
 }
 
 #[test]
+fn sentence_case_does_not_capitalize_after_colon() {
+    // A colon in running prose does not start a new sentence.
+    assert_eq!(
+        sentence_case("note: this is important", "en"),
+        "Note: this is important"
+    );
+}
+
+#[test]
+fn sentence_title_still_capitalizes_after_colon() {
+    let options = CaseOptions {
+        locale: "en",
+        mode: CaseMode::SentenceTitle,
+        subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
+        ..CaseOptions::default()
+    };
+    assert_eq!(
+        convert("note: this is important", &options),
+        "Note: This is important"
+    );
+}
+
+#[test]
 fn subtitle_normalization_ignores_numeric_ranges() {
     let options = CaseOptions {
         locale: "en",

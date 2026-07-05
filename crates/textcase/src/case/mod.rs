@@ -15,6 +15,13 @@ pub(crate) fn mode_is_sentence_like(mode: CaseMode) -> bool {
     matches!(mode, CaseMode::Sentence | CaseMode::SentenceTitle)
 }
 
+/// Whether the mode treats a subtitle separator as the start of a new
+/// capitalized segment. Plain sentence case does not: a colon in running prose
+/// ("note: this is fine") is not a new sentence.
+pub(crate) fn mode_capitalizes_after_subtitle(mode: CaseMode) -> bool {
+    matches!(mode, CaseMode::Title | CaseMode::SentenceTitle)
+}
+
 pub(crate) use normalize::{normalize_subtitle_separators, normalize_whitespace};
 pub(crate) use subtitle::should_capitalize_after_separator;
 pub(crate) use title::should_keep_lowercase_in_title;
