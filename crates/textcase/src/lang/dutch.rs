@@ -7,9 +7,6 @@ pub fn profile() -> LanguageProfile {
             "aan", "de", "den", "der", "en", "het", "in", "of", "op", "te", "van",
         ],
         lowercase_particles: &["de", "den", "der", "het", "te", "van"],
-        noun_articles: &[],
-        noun_prepositions: &[],
-        noun_suffixes: &[],
-        ambiguous_lowercase: &[],
+        ..LanguageProfile::neutral()
     }
 }

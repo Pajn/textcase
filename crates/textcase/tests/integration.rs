@@ -61,6 +61,23 @@ fn greek_lowercases_to_final_sigma() {
 }
 
 #[test]
+fn unknown_locale_gets_neutral_profile_not_english() {
+    // English stop words must not leak into languages without a profile.
+    let polish = CaseOptions {
+        locale: "pl",
+        mode: CaseMode::Title,
+        ..CaseOptions::default()
+    };
+    assert_eq!(convert("all of the things", &polish), "All Of The Things");
+    let english = CaseOptions {
+        locale: "en",
+        mode: CaseMode::Title,
+        ..CaseOptions::default()
+    };
+    assert_eq!(convert("all of the things", &english), "All of the Things");
+}
+
+#[test]
 fn sentence_case_normalizes_basic_english() {
     assert_eq!(
         sentence_case("the rise of github in berlin", "en"),

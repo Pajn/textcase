@@ -5,9 +5,6 @@ pub fn profile() -> LanguageProfile {
         locale: "tr",
         stop_words: &["ama", "da", "de", "ile", "ve", "veya"],
         lowercase_particles: &[],
-        noun_articles: &[],
-        noun_prepositions: &[],
-        noun_suffixes: &[],
-        ambiguous_lowercase: &[],
+        ..LanguageProfile::neutral()
     }
 }
