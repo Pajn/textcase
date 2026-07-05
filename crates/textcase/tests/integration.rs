@@ -10,6 +10,7 @@ use textcase::plugin::{
 };
 use textcase::{
     CaseMode, CaseOptions, GermanMode, PluginSet, SubtitleSeparatorStyle, convert, sentence_case,
+    sentence_case_title,
 };
 
 #[test]
@@ -106,6 +107,27 @@ fn sentence_case_preserves_acronyms_in_mixed_text() {
 #[test]
 fn sentence_case_recases_stray_single_capital() {
     assert_eq!(sentence_case("buy A dog", "en"), "Buy a dog");
+}
+
+#[test]
+fn sentence_case_preserves_line_breaks() {
+    assert_eq!(
+        sentence_case("line one\nline two", "en"),
+        "Line one\nline two"
+    );
+}
+
+#[test]
+fn sentence_case_still_collapses_horizontal_whitespace() {
+    assert_eq!(sentence_case("hello    world", "en"), "Hello world");
+}
+
+#[test]
+fn sentence_title_flattens_line_breaks() {
+    assert_eq!(
+        sentence_case_title("line one\nline two", "en"),
+        "Line one line two"
+    );
 }
 
 #[test]
