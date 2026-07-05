@@ -230,17 +230,22 @@ fn sentence_boundary_flags(tokens: &[Token], locale: &str) -> Vec<bool> {
             continue;
         }
 
-        let followed_by_alphanumeric = tokens
-            .get(index + 1)
-            .is_some_and(|next| next.text.chars().next().is_some_and(char::is_alphanumeric));
-        if followed_by_alphanumeric {
-            continue;
-        }
-
-        if token.text == "." && index > 0 && matches!(tokens[index - 1].kind, TokenKind::Word) {
-            let previous = lowercase_locale(&tokens[index - 1].text, locale);
-            if is_abbreviation(&previous) || is_single_letter(&previous) {
+        if token.text == "." {
+            // Only the period is ambiguous with decimals ("3.5") and internal
+            // abbreviation dots ("e.g."); "!" and "?" end the sentence even
+            // without a following space.
+            let followed_by_alphanumeric = tokens
+                .get(index + 1)
+                .is_some_and(|next| next.text.chars().next().is_some_and(char::is_alphanumeric));
+            if followed_by_alphanumeric {
                 continue;
+            }
+
+            if index > 0 && matches!(tokens[index - 1].kind, TokenKind::Word) {
+                let previous = lowercase_locale(&tokens[index - 1].text, locale);
+                if is_abbreviation(&previous) || is_single_letter(&previous) {
+                    continue;
+                }
             }
         }
 
