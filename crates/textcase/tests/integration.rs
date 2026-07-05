@@ -174,6 +174,17 @@ fn sentence_case_splits_on_real_terminals() {
 }
 
 #[test]
+fn sentence_case_splits_on_unspaced_exclamation_and_question() {
+    // Unlike the period, "!" and "?" are never decimal points or abbreviation
+    // dots, so they end the sentence even without a following space.
+    assert_eq!(
+        sentence_case("wait!something happened", "en"),
+        "Wait!Something happened"
+    );
+    assert_eq!(sentence_case("really?yes it is", "en"), "Really?Yes it is");
+}
+
+#[test]
 fn sentence_case_ignores_decimal_points() {
     assert_eq!(
         sentence_case("version 3.5 is ready", "en"),
