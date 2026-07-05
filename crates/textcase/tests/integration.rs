@@ -170,6 +170,27 @@ fn title_case_capitalizes_single_letter_apostrophe_prefix() {
 }
 
 #[test]
+fn french_title_keeps_elided_particles_lowercase() {
+    let options = CaseOptions {
+        locale: "fr",
+        mode: CaseMode::Title,
+        ..CaseOptions::default()
+    };
+    // Mid-title the elided particle stays lowercase; the title-opening word
+    // still starts with a capital.
+    assert_eq!(
+        convert("l'homme d'affaires et la vie", &options),
+        "L'Homme d'Affaires et la Vie"
+    );
+    // French sentence case is unaffected: ICU capitalizes the whole first
+    // word segment.
+    assert_eq!(
+        sentence_case("l'homme est arrivé", "fr"),
+        "L'homme est arrivé"
+    );
+}
+
+#[test]
 fn sentence_case_keeps_leading_contraction() {
     assert_eq!(sentence_case("i'm going now", "en"), "I'm going now");
 }

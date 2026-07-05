@@ -214,7 +214,20 @@ fn recase_word(
         if recase_context.should_capitalize
             || !should_keep_lowercase_in_title(profile, lower, recase_context.is_edge_word)
         {
-            titlecase_word_locale(original, options.locale, profile.contraction_tails)
+            let cased = titlecase_word_locale(
+                original,
+                options.locale,
+                profile.contraction_tails,
+                profile.elision_prefixes,
+            );
+            // An elided particle stays lowercase mid-title ("d'Affaires"),
+            // but a title-opening or edge word still starts with a capital
+            // ("L'Homme").
+            if recase_context.should_capitalize || recase_context.is_edge_word {
+                uppercase_first_grapheme(&cased, options.locale)
+            } else {
+                cased
+            }
         } else {
             lowercase_locale(original, options.locale)
         }

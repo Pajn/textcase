@@ -19,6 +19,10 @@ pub struct LanguageProfile {
     /// Apostrophe contraction tails that keep a word in one titlecase segment
     /// ("don't", "o'clock") instead of opening a name segment ("O'Brien").
     pub contraction_tails: &'static [&'static str],
+    /// Elided particles before an apostrophe ("l'", "d'", "qu'"). In a title
+    /// the particle stays lowercase while the following segment is
+    /// capitalized: "d'affaires" becomes "d'Affaires".
+    pub elision_prefixes: &'static [&'static str],
 }
 
 impl LanguageProfile {
@@ -39,6 +43,7 @@ impl LanguageProfile {
             numeric_abbreviations: &["no", "vol", "fig"],
             trailing_abbreviations: &["etc"],
             contraction_tails: &[],
+            elision_prefixes: &[],
         }
     }
 
