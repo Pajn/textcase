@@ -6,6 +6,7 @@ mod getty;
 mod gleif;
 mod gnd;
 mod musicbrainz;
+mod natural_earth;
 mod openstreetmap;
 mod orcid;
 mod ror;
@@ -34,6 +35,7 @@ pub enum SourceId {
     Gleif,
     Ror,
     Cldr,
+    NaturalEarth,
     UdGermanGsd,
     Gnd,
     Orcid,
@@ -53,6 +55,7 @@ impl fmt::Display for SourceId {
             SourceId::Gleif => "gleif",
             SourceId::Ror => "ror",
             SourceId::Cldr => "cldr",
+            SourceId::NaturalEarth => "natural-earth",
             SourceId::UdGermanGsd => "ud-german-gsd",
             SourceId::Gnd => "gnd",
             SourceId::Orcid => "orcid",
@@ -144,6 +147,8 @@ const GLEIF_KINDS: &[PreparedKind] = &[
     PreparedKind::MultiwordMap,
     PreparedKind::ProtectedForms,
 ];
+const NATURAL_EARTH_KINDS: &[PreparedKind] =
+    &[PreparedKind::CanonicalMap, PreparedKind::MultiwordMap];
 const CLDR_KINDS: &[PreparedKind] = &[PreparedKind::CanonicalMap, PreparedKind::MultiwordMap];
 const ROR_KINDS: &[PreparedKind] = &[PreparedKind::CanonicalMap, PreparedKind::MultiwordMap];
 const GETTY_KINDS: &[PreparedKind] = &[PreparedKind::CanonicalMap, PreparedKind::MultiwordMap];
@@ -235,6 +240,20 @@ const DESCRIPTORS: &[SourceDescriptor] = &[
         domain_tags: &["locale", "names", "multilingual"],
         docs_anchor: "#cldr",
         purpose: "language, country, and region display names",
+        bundling_policy: "external plugin only",
+    },
+    SourceDescriptor {
+        id: SourceId::NaturalEarth,
+        display_name: "Natural Earth",
+        class: SourceClass::Green,
+        license_name: "public domain",
+        license_summary: "world-scale country and city names, no attribution required",
+        acknowledgement_flag: None,
+        recommended: false,
+        plugin_kinds: NATURAL_EARTH_KINDS,
+        domain_tags: &["geography", "places"],
+        docs_anchor: "#natural-earth",
+        purpose: "coarse geographic names without attribution obligations",
         bundling_policy: "external plugin only",
     },
     SourceDescriptor {
@@ -389,6 +408,7 @@ pub fn suggested_output_name(source: SourceId, suffix: &str) -> String {
         SourceId::UdGermanGsd => "conllu",
         SourceId::Wiktionary => "jsonl.gz",
         SourceId::Discogs => "xml.gz",
+        SourceId::NaturalEarth => "geojson",
         SourceId::Gleif => "xml",
         _ => "json",
     };
@@ -430,6 +450,15 @@ pub fn built_in_fetch_plan(
             version: "r2.13".to_string(),
             output_suffix: "r2.13".to_string(),
         }),
+        SourceId::NaturalEarth => {
+            let (source_url, urls) = natural_earth::built_in_download();
+            Ok(FetchPlan {
+                source_url,
+                urls,
+                version: natural_earth::NATURAL_EARTH_VERSION.to_string(),
+                output_suffix: "world".to_string(),
+            })
+        }
         SourceId::Cldr => {
             let lang = lang.ok_or("cldr built-in fetch requires --lang")?;
             let (source_url, urls) = cldr::built_in_download(lang);
@@ -492,6 +521,9 @@ pub fn fetch_guidance(source: SourceId) -> &'static str {
         SourceId::Gleif => {
             "URL-driven; point --url at a GLEIF golden copy or concatenated LEI file (zip, gz, or xml) from gleif.org/en/lei-data"
         }
+        SourceId::NaturalEarth => {
+            "built-in download; fetches world countries and populated places GeoJSON from a pinned Natural Earth release"
+        }
         SourceId::Cldr => {
             "built-in download; requires --lang and fetches that locale's territory and language display names from cldr-json (pinned release)"
         }
@@ -517,6 +549,7 @@ pub fn normalize_download(
             geonames::extract_zip(&archive)
         }
         SourceId::Cldr => cldr::merge(downloads),
+        SourceId::NaturalEarth => natural_earth::merge(downloads),
         SourceId::Ror => {
             let payload = downloads
                 .into_iter()
@@ -563,6 +596,7 @@ pub fn validate_source_bytes(
         SourceId::Gleif => gleif::validate(bytes),
         SourceId::Ror => ror::validate(bytes),
         SourceId::Cldr => cldr::validate(bytes),
+        SourceId::NaturalEarth => natural_earth::validate(bytes),
         SourceId::UdGermanGsd => ud_german_gsd::validate(bytes),
         SourceId::Wikidata => {
             wikidata::parse(bytes, None)?;
@@ -609,6 +643,7 @@ pub fn sample_payload(
         SourceId::Gleif => gleif::sample(lang),
         SourceId::Ror => ror::sample(lang),
         SourceId::Cldr => cldr::sample(lang),
+        SourceId::NaturalEarth => natural_earth::sample(lang),
         SourceId::UdGermanGsd => ud_german_gsd::sample(),
         SourceId::Gnd => gnd::sample(lang),
         SourceId::Orcid => orcid::sample(lang),
@@ -638,7 +673,13 @@ pub fn prepare_source(
         SourceId::Discogs => discogs::parse(bytes)?,
         SourceId::Gleif => gleif::parse(bytes)?,
         SourceId::Ror => ror::parse(bytes)?,
-        SourceId::Cldr => cldr::parse(bytes)?,
+        SourceId::Cldr => {
+            // CLDR display names are locale-scoped, so the prepared plugin must
+            // be tagged with a real locale rather than the "und" fallback.
+            lang.ok_or("cldr prepare requires --lang")?;
+            cldr::parse(bytes)?
+        }
+        SourceId::NaturalEarth => natural_earth::parse(bytes)?,
         SourceId::UdGermanGsd => ud_german_gsd::parse(bytes)?,
         SourceId::Gnd => gnd::parse(bytes)?,
         SourceId::Orcid => orcid::parse(bytes)?,
