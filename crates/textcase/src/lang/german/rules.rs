@@ -2,6 +2,11 @@ use crate::{config::GermanMode, icu::capitalize_word_locale, lexicon::LexiconPro
 
 use super::heuristics;
 
+/// Ranked candidates below this score are noise, not evidence. The German UD
+/// source scores nouns at 2.0+ and proper nouns at 3.0+, with sub-1.0 values
+/// only reachable through feature bonuses on non-noun readings.
+const MIN_RANKED_SCORE: f32 = 1.0;
+
 pub fn recase_token(
     token: &str,
     lower: &str,
@@ -15,6 +20,7 @@ pub fn recase_token(
         && let Some(candidates) = provider.ranked_candidates("de", lower)
         && let Some(candidate) = candidates
             .into_iter()
+            .filter(|candidate| candidate.score >= MIN_RANKED_SCORE)
             .max_by(|left, right| left.score.total_cmp(&right.score))
     {
         return Some(candidate.value);

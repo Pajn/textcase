@@ -749,6 +749,36 @@ fn fst_plugin_round_trip_restores_forms() {
 }
 
 #[test]
+fn german_aggressive_mode_ignores_noise_candidates() {
+    let prepared = demo_prepared_lexicon(
+        "de-ranked",
+        PreparedKind::RankedCandidates,
+        "de",
+        PreparedPayload::RankedCandidates(BTreeMap::from([(
+            "haus".to_string(),
+            vec![textcase::Candidate {
+                value: "HAUS".to_string(),
+                score: 0.3,
+            }],
+        )])),
+    );
+    let bytes = serde_json::to_vec(&prepared.to_plugin_schema()).unwrap();
+    let lexicons = PluginSet::from_json_bytes(&bytes).unwrap();
+    let options = CaseOptions {
+        locale: "de",
+        german_mode: GermanMode::Aggressive,
+        lexicons: Some(&lexicons),
+        ..CaseOptions::default()
+    };
+    // The below-threshold candidate is ignored, and the balanced article
+    // heuristic still capitalizes the noun.
+    assert_eq!(
+        convert("wir sehen das haus", &options),
+        "Wir sehen das Haus"
+    );
+}
+
+#[test]
 fn german_balanced_mode_recovers_common_noun_context() {
     let conservative = CaseOptions {
         locale: "de",
