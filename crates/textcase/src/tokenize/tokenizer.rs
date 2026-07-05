@@ -53,7 +53,12 @@ pub fn tokenize(input: &str) -> Vec<Token> {
         }
 
         let kind = if ch.is_ascii_punctuation()
-            || matches!(ch, '“' | '”' | '„' | '«' | '»' | '…' | '—' | '–')
+            || matches!(
+                ch,
+                '“' | '”' | '„' | '«' | '»' | '…' | '—' | '–'
+                // CJK, Arabic and Devanagari terminals and separators.
+                | '。' | '！' | '？' | '｡' | '؟' | '।' | '॥' | '、' | '，' | '：'
+            )
         {
             TokenKind::Punctuation
         } else {
