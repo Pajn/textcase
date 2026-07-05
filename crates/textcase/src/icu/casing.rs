@@ -23,16 +23,19 @@ pub fn titlecase_word_locale(input: &str, locale: &str) -> String {
     let id = locale_id(locale);
     let options = TitlecaseOptions::default();
 
+    let graphemes: Vec<&str> = UnicodeSegmentation::graphemes(input, true).collect();
     let mut out = String::with_capacity(input.len());
     let mut segment = String::new();
     let mut letters_in_segment = 0usize;
 
-    for grapheme in UnicodeSegmentation::graphemes(input, true) {
+    for (index, &grapheme) in graphemes.iter().enumerate() {
         let is_hyphen = matches!(grapheme, "-" | "‐" | "‑");
-        // An apostrophe opens a new segment only after a single-letter prefix
-        // (O'Brien), never inside a contraction ("don't") or a possessive.
-        let is_boundary_apostrophe =
-            matches!(grapheme, "'" | "’") && letters_in_segment == 1;
+        // An apostrophe opens a new segment after a single-letter prefix
+        // (O'Brien), but not inside a contraction ("don't", "I'm", "y'all") or
+        // a possessive.
+        let is_boundary_apostrophe = matches!(grapheme, "'" | "’")
+            && letters_in_segment == 1
+            && !is_contraction_suffix(&graphemes[index + 1..]);
 
         if is_hyphen || is_boundary_apostrophe {
             out.push_str(&mapper.titlecase_segment_to_string(&segment, &id, options));
@@ -49,6 +52,24 @@ pub fn titlecase_word_locale(input: &str, locale: &str) -> String {
     }
     out.push_str(&mapper.titlecase_segment_to_string(&segment, &id, options));
     out
+}
+
+/// Whether the graphemes following an apostrophe form a common English
+/// contraction tail. A single-letter prefix plus such a tail is a contraction
+/// ("I'm", "I'll", "I've", "y'all", "o'clock") that must stay one segment,
+/// rather than a name particle like "O'Brien" that opens a new segment.
+fn is_contraction_suffix(rest: &[&str]) -> bool {
+    let mut tail = String::new();
+    for &grapheme in rest {
+        if matches!(grapheme, "-" | "‐" | "‑" | "'" | "’") {
+            break;
+        }
+        tail.push_str(grapheme);
+    }
+    matches!(
+        tail.to_lowercase().as_str(),
+        "m" | "ll" | "ve" | "re" | "d" | "s" | "t" | "all" | "clock" | "em"
+    )
 }
 
 /// Uppercases only the first grapheme, leaving the remainder untouched.

@@ -175,7 +175,8 @@ fn recase_word(
         // start with a capital, so compose the two rather than short-circuit.
         let needs_capital = (mode_is_sentence_like(options.mode)
             && recase_context.should_capitalize)
-            || (mode_is_title(options.mode) && recase_context.is_edge_word);
+            || (mode_is_title(options.mode)
+                && (recase_context.should_capitalize || recase_context.is_edge_word));
         return if needs_capital {
             uppercase_first_grapheme(&restored, options.locale)
         } else {

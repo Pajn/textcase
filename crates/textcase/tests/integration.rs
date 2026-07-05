@@ -112,6 +112,23 @@ fn title_case_capitalizes_single_letter_apostrophe_prefix() {
 }
 
 #[test]
+fn sentence_case_keeps_leading_contraction() {
+    assert_eq!(sentence_case("i'm going now", "en"), "I'm going now");
+}
+
+#[test]
+fn title_case_keeps_single_letter_contractions() {
+    // A single-letter prefix followed by a contraction tail stays one word,
+    // unlike the O'Brien name-particle split above.
+    let options = CaseOptions {
+        locale: "en",
+        mode: CaseMode::Title,
+        ..CaseOptions::default()
+    };
+    assert_eq!(convert("i'm i'll i've y'all", &options), "I'm I'll I've Y'all");
+}
+
+#[test]
 fn sentence_case_does_not_split_on_abbreviations() {
     assert_eq!(
         sentence_case("visit dr. smith e.g. tomorrow please", "en"),
@@ -309,33 +326,20 @@ fn sentence_case_keeps_phrase_particle_lowercase_mid_sentence() {
 
 #[test]
 fn german_aggressive_mode_still_capitalizes_sentence_start() {
-    let prepared = PreparedLexicon {
-        name: "de-ranked".to_string(),
-        kind: PreparedKind::RankedCandidates,
-        locale: "de".to_string(),
-        license: LicenseMetadata {
-            name: "CC0".to_string(),
-            summary: "demo".to_string(),
-            acknowledgement_flag: None,
-        },
-        sources: vec![SourceMetadata {
-            id: "demo".to_string(),
-            display_name: "Demo".to_string(),
-            url: "https://example.invalid".to_string(),
-            version: "1".to_string(),
-            class: "green".to_string(),
-        }],
-        generated_at: "1970-01-01T00:00:00Z".to_string(),
-        // A lexicon whose canonical form for a sentence-initial word is
-        // lowercase must not defeat sentence-start capitalization.
-        payload: PreparedPayload::RankedCandidates(BTreeMap::from([(
+    // A lexicon whose canonical form for a sentence-initial word is lowercase
+    // must not defeat sentence-start capitalization.
+    let prepared = demo_prepared_lexicon(
+        "de-ranked",
+        PreparedKind::RankedCandidates,
+        "de",
+        PreparedPayload::RankedCandidates(BTreeMap::from([(
             "wir".to_string(),
             vec![textcase::Candidate {
                 value: "wir".to_string(),
                 score: 5.0,
             }],
         )])),
-    };
+    );
     let bytes = serde_json::to_vec(&prepared.to_plugin_schema()).unwrap();
     let lexicons = PluginSet::from_json_bytes(&bytes).unwrap();
     let options = CaseOptions {
@@ -348,29 +352,48 @@ fn german_aggressive_mode_still_capitalizes_sentence_start() {
 }
 
 #[test]
+fn german_title_capitalizes_after_colon_over_lexicon() {
+    let prepared = demo_prepared_lexicon(
+        "de-ranked",
+        PreparedKind::RankedCandidates,
+        "de",
+        PreparedPayload::RankedCandidates(BTreeMap::from([(
+            "wort".to_string(),
+            vec![textcase::Candidate {
+                value: "wort".to_string(),
+                score: 5.0,
+            }],
+        )])),
+    );
+    let bytes = serde_json::to_vec(&prepared.to_plugin_schema()).unwrap();
+    let lexicons = PluginSet::from_json_bytes(&bytes).unwrap();
+    let options = CaseOptions {
+        locale: "de",
+        mode: CaseMode::Title,
+        german_mode: GermanMode::Aggressive,
+        subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
+        lexicons: Some(&lexicons),
+        ..CaseOptions::default()
+    };
+    // "wort" opens the subtitle, so it must be capitalized even though the
+    // lexicon's canonical form for it is lowercase.
+    assert_eq!(
+        convert("das buch: wort zaehlt", &options),
+        "Das Buch: Wort Zaehlt"
+    );
+}
+
+#[test]
 fn json_plugin_restores_known_forms() {
-    let prepared = PreparedLexicon {
-        name: "demo".to_string(),
-        kind: PreparedKind::CanonicalMap,
-        locale: "en".to_string(),
-        license: LicenseMetadata {
-            name: "CC0".to_string(),
-            summary: "demo".to_string(),
-            acknowledgement_flag: None,
-        },
-        sources: vec![SourceMetadata {
-            id: "demo".to_string(),
-            display_name: "Demo".to_string(),
-            url: "https://example.invalid".to_string(),
-            version: "1".to_string(),
-            class: "green".to_string(),
-        }],
-        generated_at: "1970-01-01T00:00:00Z".to_string(),
-        payload: PreparedPayload::CanonicalMap(BTreeMap::from([
+    let prepared = demo_prepared_lexicon(
+        "demo",
+        PreparedKind::CanonicalMap,
+        "en",
+        PreparedPayload::CanonicalMap(BTreeMap::from([
             ("berlin".to_string(), "Berlin".to_string()),
             ("new york".to_string(), "New York".to_string()),
         ])),
-    };
+    );
     let bytes = serde_json::to_vec(&prepared.to_plugin_schema()).unwrap();
     let lexicons = PluginSet::from_json_bytes(&bytes).unwrap();
     let options = CaseOptions {
@@ -393,18 +416,8 @@ fn fst_plugin_round_trip_restores_forms() {
             name: "demo".to_string(),
             kind: PluginKind::CanonicalMap,
             locales: vec!["en".to_string()],
-            license: LicenseMetadata {
-                name: "CC0".to_string(),
-                summary: "demo".to_string(),
-                acknowledgement_flag: None,
-            },
-            sources: vec![SourceMetadata {
-                id: "demo".to_string(),
-                display_name: "Demo".to_string(),
-                url: "https://example.invalid".to_string(),
-                version: "1".to_string(),
-                class: "green".to_string(),
-            }],
+            license: demo_license(),
+            sources: vec![demo_source()],
             generated_at: "1970-01-01T00:00:00Z".to_string(),
             checksum: "demo".to_string(),
         },
@@ -471,24 +484,11 @@ fn german_balanced_mode_does_not_carry_article_across_punctuation() {
 
 #[test]
 fn german_aggressive_mode_uses_ranked_candidates() {
-    let prepared = PreparedLexicon {
-        name: "de-ranked".to_string(),
-        kind: PreparedKind::RankedCandidates,
-        locale: "de".to_string(),
-        license: LicenseMetadata {
-            name: "CC0".to_string(),
-            summary: "demo".to_string(),
-            acknowledgement_flag: None,
-        },
-        sources: vec![SourceMetadata {
-            id: "demo".to_string(),
-            display_name: "Demo".to_string(),
-            url: "https://example.invalid".to_string(),
-            version: "1".to_string(),
-            class: "green".to_string(),
-        }],
-        generated_at: "1970-01-01T00:00:00Z".to_string(),
-        payload: PreparedPayload::RankedCandidates(BTreeMap::from([
+    let prepared = demo_prepared_lexicon(
+        "de-ranked",
+        PreparedKind::RankedCandidates,
+        "de",
+        PreparedPayload::RankedCandidates(BTreeMap::from([
             (
                 "sprache".to_string(),
                 vec![textcase::Candidate {
@@ -504,7 +504,7 @@ fn german_aggressive_mode_uses_ranked_candidates() {
                 }],
             ),
         ])),
-    };
+    );
     let bytes = serde_json::to_vec(&prepared.to_plugin_schema()).unwrap();
     let lexicons = PluginSet::from_json_bytes(&bytes).unwrap();
     let options = CaseOptions {
@@ -517,6 +517,41 @@ fn german_aggressive_mode_uses_ranked_candidates() {
         convert("sprache und analyse", &options),
         "Sprache und Analyse"
     );
+}
+
+fn demo_license() -> LicenseMetadata {
+    LicenseMetadata {
+        name: "CC0".to_string(),
+        summary: "demo".to_string(),
+        acknowledgement_flag: None,
+    }
+}
+
+fn demo_source() -> SourceMetadata {
+    SourceMetadata {
+        id: "demo".to_string(),
+        display_name: "Demo".to_string(),
+        url: "https://example.invalid".to_string(),
+        version: "1".to_string(),
+        class: "green".to_string(),
+    }
+}
+
+fn demo_prepared_lexicon(
+    name: &str,
+    kind: PreparedKind,
+    locale: &str,
+    payload: PreparedPayload,
+) -> PreparedLexicon {
+    PreparedLexicon {
+        name: name.to_string(),
+        kind,
+        locale: locale.to_string(),
+        license: demo_license(),
+        sources: vec![demo_source()],
+        generated_at: "1970-01-01T00:00:00Z".to_string(),
+        payload,
+    }
 }
 
 fn unique_temp_path(prefix: &str, extension: &str) -> std::path::PathBuf {
