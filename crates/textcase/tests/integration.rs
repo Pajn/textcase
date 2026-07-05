@@ -248,6 +248,27 @@ fn sentence_case_converts_shouting_titles() {
 }
 
 #[test]
+fn sentence_case_shouting_tolerates_lowercase_stop_words() {
+    // A lowercase connective does not turn a shouted title into acronyms.
+    assert_eq!(
+        sentence_case("NEW YORK vs THE WORLD", "en"),
+        "New York vs the world"
+    );
+    // Short all-caps words without a long shouted word stay acronyms.
+    assert_eq!(sentence_case("USA vs USSR", "en"), "USA vs USSR");
+}
+
+#[test]
+fn sentence_case_shouting_is_scoped_per_sentence() {
+    // The first sentence is shouted and converts; the second keeps its
+    // genuine acronym.
+    assert_eq!(
+        sentence_case("BREAKING NEWS TODAY. the NASA probe landed", "en"),
+        "Breaking news today. The NASA probe landed"
+    );
+}
+
+#[test]
 fn sentence_case_preserves_acronyms_in_mixed_text() {
     assert_eq!(
         sentence_case("NASA launched the probe", "en"),
