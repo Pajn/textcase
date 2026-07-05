@@ -185,6 +185,28 @@ fn sentence_case_splits_on_unspaced_exclamation_and_question() {
 }
 
 #[test]
+fn sentence_case_ellipsis_follows_input_casing() {
+    // A trailing-off ellipsis continues the sentence...
+    assert_eq!(
+        sentence_case("wait… there is more", "en"),
+        "Wait… there is more"
+    );
+    assert_eq!(
+        sentence_case("hold on... something is coming", "en"),
+        "Hold on... something is coming"
+    );
+    // ...but a capitalized next word marks a genuine new sentence.
+    assert_eq!(
+        sentence_case("wait… Then it began", "en"),
+        "Wait… Then it began"
+    );
+    assert_eq!(
+        sentence_case("hold on... Something is coming", "en"),
+        "Hold on... Something is coming"
+    );
+}
+
+#[test]
 fn sentence_case_ignores_decimal_points() {
     assert_eq!(
         sentence_case("version 3.5 is ready", "en"),

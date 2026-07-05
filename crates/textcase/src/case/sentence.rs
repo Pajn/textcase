@@ -230,6 +230,18 @@ fn sentence_boundary_flags(tokens: &[Token], locale: &str) -> Vec<bool> {
             continue;
         }
 
+        // An ellipsis usually trails off mid-sentence rather than ending it,
+        // so it only starts a new sentence when the input already capitalizes
+        // the next word.
+        if token.text == "…" || is_ellipsis_period(tokens, index) {
+            if tokens.get(index + 1).is_some_and(|next| next.text == ".") {
+                // Interior dot of a "..." run; the run's last dot decides.
+                continue;
+            }
+            flags[index] = next_word_is_capitalized(tokens, index);
+            continue;
+        }
+
         if token.text == "." {
             // Only the period is ambiguous with decimals ("3.5") and internal
             // abbreviation dots ("e.g."); "!" and "?" end the sentence even
@@ -252,6 +264,25 @@ fn sentence_boundary_flags(tokens: &[Token], locale: &str) -> Vec<bool> {
         flags[index] = true;
     }
     flags
+}
+
+/// A period that belongs to a `..`/`...` run is ellipsis punctuation, not a
+/// full stop.
+fn is_ellipsis_period(tokens: &[Token], index: usize) -> bool {
+    tokens[index].text == "."
+        && (index
+            .checked_sub(1)
+            .is_some_and(|previous| tokens[previous].text == ".")
+            || tokens.get(index + 1).is_some_and(|next| next.text == "."))
+}
+
+/// Whether the input already capitalizes the first word after `index`,
+/// skipping whitespace and intervening punctuation such as quotes.
+fn next_word_is_capitalized(tokens: &[Token], index: usize) -> bool {
+    tokens[index + 1..]
+        .iter()
+        .find(|token| token.is_word())
+        .is_some_and(|token| token.text.chars().next().is_some_and(char::is_uppercase))
 }
 
 fn is_single_letter(word: &str) -> bool {
