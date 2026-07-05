@@ -79,6 +79,44 @@ fn sentence_case_downcases_title_cased_input() {
 }
 
 #[test]
+fn sentence_case_preserves_mid_sentence_proper_nouns() {
+    // A lone capital in an otherwise lowercase sentence is a proper-noun
+    // signal that no lexicon can restore once lost.
+    assert_eq!(
+        sentence_case("yesterday Alice met Bob in Paris", "en"),
+        "Yesterday Alice met Bob in Paris"
+    );
+    // German prose keeps its capitalized nouns even in conservative mode.
+    assert_eq!(
+        sentence_case("wir besuchen die Alte Oper heute", "de"),
+        "Wir besuchen die Alte Oper heute"
+    );
+}
+
+#[test]
+fn sentence_case_can_disable_existing_capital_preservation() {
+    let options = CaseOptions {
+        locale: "en",
+        preserve_existing_capitals: false,
+        ..CaseOptions::default()
+    };
+    assert_eq!(
+        convert("yesterday Alice met Bob", &options),
+        "Yesterday alice met bob"
+    );
+}
+
+#[test]
+fn sentence_case_capitalizes_english_pronoun_i() {
+    assert_eq!(sentence_case("i think i can", "en"), "I think I can");
+    assert_eq!(
+        sentence_case("he said i'm ready", "en"),
+        "He said I'm ready"
+    );
+    assert_eq!(sentence_case("I THINK I CAN", "en"), "I think I can");
+}
+
+#[test]
 fn sentence_case_preserves_internal_capitals() {
     assert_eq!(
         sentence_case("the iPhone and the McDonald empire", "en"),

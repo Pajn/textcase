@@ -15,6 +15,7 @@ mod spanish;
 mod swedish;
 mod turkish;
 
+pub(crate) use english::always_capitalized as english_always_capitalized;
 pub use profile::LanguageProfile;
 
 pub fn profile_for_locale(locale: &str) -> LanguageProfile {
