@@ -136,6 +136,64 @@ fn title_case_keeps_small_words_lowercase() {
 }
 
 #[test]
+fn sentence_case_capitalizes_phrase_at_sentence_start() {
+    // The canonical form starts with a lowercase particle; it must still be
+    // capitalized when it begins the sentence.
+    assert_eq!(
+        sentence_case("van der waals forces are weak", "en"),
+        "Van der Waals forces are weak"
+    );
+}
+
+#[test]
+fn sentence_case_keeps_phrase_particle_lowercase_mid_sentence() {
+    assert_eq!(
+        sentence_case("we study van der waals forces", "en"),
+        "We study van der Waals forces"
+    );
+}
+
+#[test]
+fn german_aggressive_mode_still_capitalizes_sentence_start() {
+    let prepared = PreparedLexicon {
+        name: "de-ranked".to_string(),
+        kind: PreparedKind::RankedCandidates,
+        locale: "de".to_string(),
+        license: LicenseMetadata {
+            name: "CC0".to_string(),
+            summary: "demo".to_string(),
+            acknowledgement_flag: None,
+        },
+        sources: vec![SourceMetadata {
+            id: "demo".to_string(),
+            display_name: "Demo".to_string(),
+            url: "https://example.invalid".to_string(),
+            version: "1".to_string(),
+            class: "green".to_string(),
+        }],
+        generated_at: "1970-01-01T00:00:00Z".to_string(),
+        // A lexicon whose canonical form for a sentence-initial word is
+        // lowercase must not defeat sentence-start capitalization.
+        payload: PreparedPayload::RankedCandidates(BTreeMap::from([(
+            "wir".to_string(),
+            vec![textcase::Candidate {
+                value: "wir".to_string(),
+                score: 5.0,
+            }],
+        )])),
+    };
+    let bytes = serde_json::to_vec(&prepared.to_plugin_schema()).unwrap();
+    let lexicons = PluginSet::from_json_bytes(&bytes).unwrap();
+    let options = CaseOptions {
+        locale: "de",
+        german_mode: GermanMode::Aggressive,
+        lexicons: Some(&lexicons),
+        ..CaseOptions::default()
+    };
+    assert_eq!(convert("wir sind hier", &options), "Wir sind hier");
+}
+
+#[test]
 fn json_plugin_restores_known_forms() {
     let prepared = PreparedLexicon {
         name: "demo".to_string(),

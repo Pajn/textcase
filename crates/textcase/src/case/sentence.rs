@@ -6,7 +6,10 @@ use crate::{
         should_keep_lowercase_in_title,
     },
     config::{CaseMode, CaseOptions},
-    icu::{capitalize_word_locale, lowercase_locale, titlecase_word_locale},
+    icu::{
+        capitalize_word_locale, lowercase_locale, primary_language, titlecase_word_locale,
+        uppercase_first_grapheme,
+    },
     lang::{german, profile_for_locale},
     lexicon::{builtin_canonical_form, builtin_canonical_phrase},
     tokenize::{Token, TokenKind, is_abbreviation, is_sentence_terminal, reconstruct, tokenize},
@@ -50,6 +53,7 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
     let mut after_subtitle = false;
     let mut previous_word: Option<String> = None;
     let mut previous_word2: Option<String> = None;
+    let mut sentence_start_words: HashSet<usize> = HashSet::new();
 
     for (index, token) in tokens.iter_mut().enumerate() {
         match token.kind {
@@ -58,6 +62,9 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
                 let lower = lowercase_locale(&original, options.locale);
                 let at_sentence_cap = sentence_start
                     || (after_subtitle && options.capitalize_after_subtitle_separator);
+                if at_sentence_cap {
+                    sentence_start_words.insert(index);
+                }
                 let is_edge = edge_words.contains(&index);
                 let recase_context = RecaseContext {
                     should_capitalize: at_sentence_cap,
@@ -99,7 +106,7 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
     }
 
     if options.preserve_known_proper_nouns {
-        apply_phrase_replacements(&mut tokens, options);
+        apply_phrase_replacements(&mut tokens, options, &sentence_start_words);
     }
 
     reconstruct(&tokens)
@@ -137,7 +144,7 @@ fn recase_word(
     profile: crate::lang::LanguageProfile,
     recase_context: RecaseContext<'_>,
 ) -> String {
-    if options.locale.starts_with("de")
+    if primary_language(options.locale) == "de"
         && let Some(restored) = german::recase_token(
             original,
             lower,
@@ -147,7 +154,17 @@ fn recase_word(
             options.lexicons,
         )
     {
-        return restored;
+        // The German recase decides letter case for the word body, but a
+        // sentence- or subtitle-initial word (and title edge words) must still
+        // start with a capital, so compose the two rather than short-circuit.
+        let needs_capital = (mode_is_sentence_like(options.mode)
+            && recase_context.should_capitalize)
+            || (mode_is_title(options.mode) && recase_context.is_edge_word);
+        return if needs_capital {
+            uppercase_first_grapheme(&restored, options.locale)
+        } else {
+            restored
+        };
     }
 
     if mode_is_title(options.mode) {
@@ -214,7 +231,11 @@ fn lookup_word(options: &CaseOptions<'_>, lower: &str) -> Option<String> {
         .and_then(|provider| provider.canonical_form(options.locale, lower))
 }
 
-fn apply_phrase_replacements(tokens: &mut [Token], options: &CaseOptions<'_>) {
+fn apply_phrase_replacements(
+    tokens: &mut [Token],
+    options: &CaseOptions<'_>,
+    sentence_start_words: &HashSet<usize>,
+) {
     let word_indices: Vec<usize> = tokens
         .iter()
         .enumerate()
@@ -249,6 +270,13 @@ fn apply_phrase_replacements(tokens: &mut [Token], options: &CaseOptions<'_>) {
         if let Some((span_len, canonical)) = matched {
             let first = word_indices[cursor];
             let last = word_indices[cursor + span_len - 1];
+            // A canonical phrase can begin with a lowercase particle ("van der
+            // Waals"); force a capital when the span starts a sentence.
+            let canonical = if sentence_start_words.contains(&first) {
+                uppercase_first_grapheme(&canonical, options.locale)
+            } else {
+                canonical
+            };
             tokens[first].text = canonical;
             for token in &mut tokens[first + 1..=last] {
                 token.text.clear();
