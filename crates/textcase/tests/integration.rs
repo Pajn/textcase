@@ -21,6 +21,24 @@ fn sentence_case_normalizes_basic_english() {
 }
 
 #[test]
+fn sentence_case_downcases_title_cased_input() {
+    // Ordinary capitalized words must not be treated as mixed case, otherwise
+    // converting already-title-cased text would be a no-op.
+    assert_eq!(
+        sentence_case("The Quick Brown Fox Jumps", "en"),
+        "The quick brown fox jumps"
+    );
+}
+
+#[test]
+fn sentence_case_preserves_internal_capitals() {
+    assert_eq!(
+        sentence_case("the iPhone and the McDonald empire", "en"),
+        "The iPhone and the McDonald empire"
+    );
+}
+
+#[test]
 fn sentence_title_capitalizes_after_subtitle_separator() {
     let options = CaseOptions {
         locale: "en",
