@@ -13,8 +13,8 @@ use crate::{
     lang::{german, profile_for_locale},
     lexicon::{builtin_canonical_form, builtin_canonical_phrase},
     tokenize::{
-        Token, TokenKind, is_abbreviation, is_sentence_terminal, is_wide_sentence_terminal,
-        reconstruct, tokenize,
+        AbbreviationKind, Token, TokenKind, abbreviation_kind, is_sentence_terminal,
+        is_wide_sentence_terminal, reconstruct, tokenize,
     },
     util::{is_acronym_candidate, is_mixed_case, is_shouting},
 };
@@ -255,7 +255,13 @@ fn sentence_boundary_flags(tokens: &[Token], locale: &str) -> Vec<bool> {
 
             if index > 0 && matches!(tokens[index - 1].kind, TokenKind::Word) {
                 let previous = lowercase_locale(&tokens[index - 1].text, locale);
-                if is_abbreviation(&previous) || is_single_letter(&previous) {
+                let suppressed = match abbreviation_kind(&previous) {
+                    Some(AbbreviationKind::Title) => true,
+                    Some(AbbreviationKind::Numeric) => next_word_starts_with_digit(tokens, index),
+                    Some(AbbreviationKind::Trailing) => !next_word_is_capitalized(tokens, index),
+                    None => is_single_letter(&previous),
+                };
+                if suppressed {
                     continue;
                 }
             }
@@ -283,6 +289,13 @@ fn next_word_is_capitalized(tokens: &[Token], index: usize) -> bool {
         .iter()
         .find(|token| token.is_word())
         .is_some_and(|token| token.text.chars().next().is_some_and(char::is_uppercase))
+}
+
+fn next_word_starts_with_digit(tokens: &[Token], index: usize) -> bool {
+    tokens[index + 1..]
+        .iter()
+        .find(|token| token.is_word())
+        .is_some_and(|token| token.text.chars().next().is_some_and(char::is_numeric))
 }
 
 fn is_single_letter(word: &str) -> bool {
