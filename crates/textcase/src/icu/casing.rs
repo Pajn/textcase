@@ -54,6 +54,23 @@ pub fn titlecase_word_locale(input: &str, locale: &str) -> String {
     out
 }
 
+/// Uppercases only the first grapheme, leaving the remainder untouched.
+///
+/// Unlike [`capitalize_word_locale`], this preserves internal casing, so it can
+/// force a sentence-initial capital onto an already-cased form such as
+/// `van der Waals` without flattening the rest to lowercase.
+pub fn uppercase_first_grapheme(input: &str, locale: &str) -> String {
+    let mut graphemes = UnicodeSegmentation::graphemes(input, true);
+    match graphemes.next() {
+        Some(first) => {
+            let mut out = uppercase_locale(first, locale);
+            out.push_str(graphemes.as_str());
+            out
+        }
+        None => String::new(),
+    }
+}
+
 fn uppercase_locale(input: &str, locale: &str) -> String {
     let language = primary_language(locale);
     match language {
@@ -69,6 +86,6 @@ fn uppercase_locale(input: &str, locale: &str) -> String {
     }
 }
 
-fn primary_language(locale: &str) -> &str {
+pub fn primary_language(locale: &str) -> &str {
     locale.split(['-', '_']).next().unwrap_or(locale)
 }
