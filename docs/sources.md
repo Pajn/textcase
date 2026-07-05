@@ -20,6 +20,7 @@ textcase lexicon show-license <source> # per-source licensing and setup guidance
 | `discogs` | green | artists, labels, releases from monthly CC0 dumps | deep music catalog coverage beyond MusicBrainz | URL-driven | `canonical-map`, `multiword-map`, `protected-forms` | none |
 | `gleif` | green | legal entity names from the LEI system | company and organization names with authoritative casing | URL-driven | `canonical-map`, `multiword-map`, `protected-forms` | none |
 | `ror` | green | research organization names | universities, institutes, and labs in academic corpora | URL-driven | `canonical-map`, `multiword-map` | none |
+| `cldr` | green | language, country, and region display names per locale | high-frequency vocabulary ("french", "united kingdom") in any supported locale | built-in | `canonical-map`, `multiword-map` | none |
 | `geonames` | yellow | country- and world-scale gazetteer names | geographic proper nouns | built-in | `canonical-map`, `multiword-map` | none |
 | `getty` | yellow | art, heritage, and museum vocabulary | museums, artworks, styles, places of culture | URL-driven | `canonical-map`, `multiword-map` | none |
 | `wiktionary` | orange | lexical hints, inflected forms, alternate spellings | optional lexical enrichment and German/common-word recovery | built-in | `word-set`, `ranked-candidates` | `--acknowledge-share-alike` |
@@ -73,6 +74,16 @@ textcase lexicon prepare wiktionary --input data/raw/wiktionary-de.jsonl.gz \
 ```
 
 Prepare with `--kind ranked-candidates` instead when you want candidate scoring rather than a plain lexical set.
+
+### `cldr` (built-in, green)
+
+Language, country, and region display names for one locale from the Unicode CLDR — the authority on how "french", "deutschland", or "vereinigtes königreich" are cased in each language. Small, canonical, and high-frequency vocabulary; a good first plugin. The download is pinned to a cldr-json release and takes any CLDR locale code as `--lang`.
+
+```bash
+textcase lexicon fetch cldr --lang de --output-dir data/raw
+textcase lexicon prepare cldr --input data/raw/cldr-de.json \
+    --output data/prepared/cldr-de.json --kind canonical-map --lang de
+```
 
 ### `ud-german-gsd` (built-in, orange)
 
