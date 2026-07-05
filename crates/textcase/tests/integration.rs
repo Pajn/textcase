@@ -323,6 +323,66 @@ fn sentence_case_lexicon_overrides_all_caps() {
 }
 
 #[test]
+fn sentence_case_gates_ambiguous_builtin_forms_on_casing() {
+    // "rust" is also an ordinary word; without a casing signal in the input
+    // the builtin canonical form must not fire.
+    assert_eq!(
+        sentence_case("the rust on the old pipe", "en"),
+        "The rust on the old pipe"
+    );
+    // A cased occurrence restores the canonical form.
+    assert_eq!(
+        sentence_case("we love Rust dearly", "en"),
+        "We love Rust dearly"
+    );
+    // A title always carries the signal.
+    let title = CaseOptions {
+        locale: "en",
+        mode: CaseMode::Title,
+        ..CaseOptions::default()
+    };
+    assert_eq!(
+        convert("programming in rust", &title),
+        "Programming in Rust"
+    );
+
+    // "latex" is likewise an ordinary word (the material); it stays lowercase in
+    // plain prose but restores under a casing signal.
+    assert_eq!(
+        sentence_case("the latex gloves tore", "en"),
+        "The latex gloves tore"
+    );
+    assert_eq!(
+        convert("typesetting in latex", &title),
+        "Typesetting in LaTeX"
+    );
+}
+
+#[test]
+fn user_lexicon_overrides_builtin_forms() {
+    let prepared = demo_prepared_lexicon(
+        "en-override",
+        PreparedKind::CanonicalMap,
+        "en",
+        PreparedPayload::CanonicalMap(BTreeMap::from([(
+            "github".to_string(),
+            "GITHUB".to_string(),
+        )])),
+    );
+    let bytes = serde_json::to_vec(&prepared.to_plugin_schema()).unwrap();
+    let lexicons = PluginSet::from_json_bytes(&bytes).unwrap();
+    let options = CaseOptions {
+        locale: "en",
+        lexicons: Some(&lexicons),
+        ..CaseOptions::default()
+    };
+    assert_eq!(
+        convert("using github daily", &options),
+        "Using GITHUB daily"
+    );
+}
+
+#[test]
 fn sentence_case_all_caps_phrase_canonicalizes() {
     // Same precedence for multi-word canonical forms.
     assert_eq!(sentence_case("NEW YORK is big", "en"), "New York is big");
@@ -471,9 +531,11 @@ fn sentence_title_capitalizes_after_subtitle_separator() {
         subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
         ..CaseOptions::default()
     };
+    // Lowercase "rust" carries no casing signal in a sentence-like mode, so
+    // the ambiguous builtin form is not restored.
     assert_eq!(
         convert("the rise of github - inside rust tooling", &options),
-        "The rise of GitHub: Inside Rust tooling"
+        "The rise of GitHub: Inside rust tooling"
     );
 }
 
