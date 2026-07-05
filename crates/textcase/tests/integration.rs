@@ -109,6 +109,43 @@ fn sentence_case_recases_stray_single_capital() {
 }
 
 #[test]
+fn subtitle_normalization_ignores_numeric_ranges() {
+    let options = CaseOptions {
+        locale: "en",
+        subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
+        ..CaseOptions::default()
+    };
+    assert_eq!(
+        convert("tracks 3 - 5 remastered", &options),
+        "Tracks 3 - 5 remastered"
+    );
+}
+
+#[test]
+fn subtitle_normalization_preserves_literal_sentinel_text() {
+    let options = CaseOptions {
+        locale: "en",
+        subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
+        ..CaseOptions::default()
+    };
+    assert_eq!(convert("a <subtitle> b", &options), "A <subtitle> b");
+}
+
+#[test]
+fn subtitle_normalization_converts_flanked_dash() {
+    let options = CaseOptions {
+        locale: "en",
+        mode: CaseMode::SentenceTitle,
+        subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
+        ..CaseOptions::default()
+    };
+    assert_eq!(
+        convert("the album - remastered", &options),
+        "The album: Remastered"
+    );
+}
+
+#[test]
 fn sentence_title_capitalizes_after_subtitle_separator() {
     let options = CaseOptions {
         locale: "en",
