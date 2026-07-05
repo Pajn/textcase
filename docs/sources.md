@@ -1,6 +1,6 @@
 # Source catalog and setup guide
 
-Every plugin should have a clear origin, a clear license story, and a workflow a new user can follow without reading the implementation. This guide covers all ten supported sources; the CLI pipeline itself (fetch → prepare → build-plugin) is explained in the [CLI README](../crates/textcase-cli/README.md).
+Every plugin should have a clear origin, a clear license story, and a workflow a new user can follow without reading the implementation. This guide covers all fifteen supported sources; the CLI pipeline itself (fetch → prepare → build-plugin) is explained in the [CLI README](../crates/textcase-cli/README.md).
 
 Two commands answer most questions interactively:
 
@@ -31,8 +31,11 @@ textcase lexicon show-license <source> # per-source licensing and setup guidance
 
 Starter stacks for common needs:
 
+- **First plugin** — `cldr` and `natural-earth`: small built-in downloads, no obligations, immediately useful vocabulary.
 - **Clean proper nouns** — `wikidata`, `gnd`, `orcid`, and `musicbrainz`: the cleanest redistribution story with the highest-value coverage.
-- **Place names** — `geonames` first for city, region, and country names; add `openstreetmap` only when you need street-level or POI coverage and can absorb ODbL obligations.
+- **Music and media** — `musicbrainz` plus `discogs`: the two CC0 catalogs complement each other, with Discogs adding deeper label and electronic-music coverage.
+- **Organizations** — `gleif` for legal entity names worldwide, `ror` for research institutions, `wikidata` for famous organizations.
+- **Place names** — `natural-earth` for obligation-free coarse coverage, `geonames` for depth, `openstreetmap` only when you need street-level coverage and can absorb ODbL obligations.
 - **German enrichment** — `gnd` for proper nouns, `wiktionary` for lexical hints, `ud-german-gsd` for ranked candidates in aggressive German mode.
 
 ## 2. Check the license
@@ -49,7 +52,7 @@ The reasoning behind the classes is in [licensing-policy.md](licensing-policy.md
 
 There are two fetch styles:
 
-- **Built-in workflows** (`geonames`, `wiktionary`, `ud-german-gsd`): the upstream is a stable, dataset-like download, so the CLI knows how to get it.
+- **Built-in workflows** (`geonames`, `cldr`, `natural-earth`, `wiktionary`, `ud-german-gsd`): the upstream is a stable, dataset-like download, so the CLI knows how to get it.
 - **URL-driven workflows** (everything else): the upstream is a query-oriented API and the right corpus depends on your project, so you pass the exact slice with `--url`. The CLI still validates the payload and records provenance in the raw sidecar manifest.
 
 Each source below follows the same template: what it provides, when to use it, and the commands.
