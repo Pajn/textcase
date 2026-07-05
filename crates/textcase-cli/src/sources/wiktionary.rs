@@ -13,8 +13,7 @@ pub fn built_in_download(lang: &str) -> Result<(String, String), Box<dyn std::er
     let url = match normalized.as_str() {
         // Raw wiktextract feeds for Latin-script editions are the most stable built-in option.
         "cs" | "de" | "es" | "fr" | "it" | "nl" | "pl" | "pt" | "tr" => format!(
-            "https://kaikki.org/dictionary/downloads/{0}/{0}-extract.jsonl.gz",
-            normalized
+            "https://kaikki.org/dictionary/downloads/{normalized}/{normalized}-extract.jsonl.gz"
         ),
         // English currently needs the language-specific words feed because the raw extract is the
         // full multilingual enwiktionary dump.

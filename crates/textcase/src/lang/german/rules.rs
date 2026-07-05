@@ -10,17 +10,14 @@ pub fn recase_token(
     mode: GermanMode,
     lexicons: Option<&dyn LexiconProvider>,
 ) -> Option<String> {
-    if mode >= GermanMode::Aggressive {
-        if let Some(provider) = lexicons {
-            if let Some(candidates) = provider.ranked_candidates("de", lower) {
-                if let Some(candidate) = candidates
-                    .into_iter()
-                    .max_by(|left, right| left.score.total_cmp(&right.score))
-                {
-                    return Some(candidate.value);
-                }
-            }
-        }
+    if mode >= GermanMode::Aggressive
+        && let Some(provider) = lexicons
+        && let Some(candidates) = provider.ranked_candidates("de", lower)
+        && let Some(candidate) = candidates
+            .into_iter()
+            .max_by(|left, right| left.score.total_cmp(&right.score))
+    {
+        return Some(candidate.value);
     }
 
     if mode >= GermanMode::Balanced

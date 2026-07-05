@@ -131,17 +131,17 @@ fn recase_word(
     profile: crate::lang::LanguageProfile,
     recase_context: RecaseContext<'_>,
 ) -> String {
-    if options.locale.starts_with("de") {
-        if let Some(restored) = german::recase_token(
+    if options.locale.starts_with("de")
+        && let Some(restored) = german::recase_token(
             original,
             lower,
             recase_context.previous_word,
             recase_context.previous_word2,
             options.german_mode,
             options.lexicons,
-        ) {
-            return restored;
-        }
+        )
+    {
+        return restored;
     }
 
     if mode_is_title(options.mode) {
