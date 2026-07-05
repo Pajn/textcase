@@ -13,8 +13,8 @@ use crate::{
     lang::{english_always_capitalized, german, profile_for_locale},
     lexicon::{builtin_canonical_form, builtin_canonical_phrase, builtin_form_is_ambiguous},
     tokenize::{
-        AbbreviationKind, Token, TokenKind, abbreviation_kind, is_sentence_terminal,
-        is_wide_sentence_terminal, reconstruct, tokenize,
+        AbbreviationKind, Token, TokenKind, is_sentence_terminal, is_wide_sentence_terminal,
+        reconstruct, tokenize,
     },
     util::{is_acronym_candidate, is_mixed_case},
 };
@@ -36,7 +36,7 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
     }
 
     let profile = profile_for_locale(options.locale);
-    let sentence_boundaries = sentence_boundary_flags(&tokens, options.locale);
+    let sentence_boundaries = sentence_boundary_flags(&tokens, options.locale, profile);
     let subtitle_separators = subtitle_separator_flags(&tokens);
     // When a whole sentence is capitalized it is a shouted title, not a
     // sequence of acronyms, so acronym preservation must not block conversion.
@@ -214,7 +214,7 @@ fn recase_word(
         if recase_context.should_capitalize
             || !should_keep_lowercase_in_title(profile, lower, recase_context.is_edge_word)
         {
-            titlecase_word_locale(original, options.locale)
+            titlecase_word_locale(original, options.locale, profile.contraction_tails)
         } else {
             lowercase_locale(original, options.locale)
         }
@@ -237,7 +237,11 @@ fn recase_word(
 /// internal dots of `e.g.` or `3.5`) does not start a new sentence, and a
 /// period directly after an abbreviation or a single-letter initial is skipped
 /// as well.
-fn sentence_boundary_flags(tokens: &[Token], locale: &str) -> Vec<bool> {
+fn sentence_boundary_flags(
+    tokens: &[Token],
+    locale: &str,
+    profile: crate::lang::LanguageProfile,
+) -> Vec<bool> {
     let mut flags = vec![false; tokens.len()];
     for index in 0..tokens.len() {
         let token = &tokens[index];
@@ -277,7 +281,7 @@ fn sentence_boundary_flags(tokens: &[Token], locale: &str) -> Vec<bool> {
 
             if index > 0 && matches!(tokens[index - 1].kind, TokenKind::Word) {
                 let previous = lowercase_locale(&tokens[index - 1].text, locale);
-                let suppressed = match abbreviation_kind(&previous) {
+                let suppressed = match profile.abbreviation_kind(&previous) {
                     Some(AbbreviationKind::Title) => true,
                     Some(AbbreviationKind::Numeric) => next_word_starts_with_digit(tokens, index),
                     Some(AbbreviationKind::Trailing) => !next_word_is_capitalized(tokens, index),

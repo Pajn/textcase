@@ -4,7 +4,9 @@ pub fn profile() -> LanguageProfile {
     LanguageProfile {
         locale: "da",
         stop_words: &["af", "den", "det", "en", "i", "og", "på", "til"],
-        lowercase_particles: &[],
+        title_abbreviations: &["dr", "prof", "hr", "fru", "st"],
+        numeric_abbreviations: &["nr", "vol", "fig"],
+        trailing_abbreviations: &["osv", "mv", "etc"],
         ..LanguageProfile::neutral()
     }
 }

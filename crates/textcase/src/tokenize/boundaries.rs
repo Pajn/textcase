@@ -25,31 +25,15 @@ pub enum AbbreviationKind {
     Trailing,
 }
 
-const TITLE_ABBREVIATIONS: &[&str] = &[
-    "mr", "mrs", "ms", "dr", "prof", "st", "sr", "jr", "vs", "feat", "ft", "capt", "sgt", "col",
-    "gen", "gov",
-];
-
-const NUMERIC_ABBREVIATIONS: &[&str] = &["no", "vol", "fig", "approx"];
-
-const TRAILING_ABBREVIATIONS: &[&str] = &["etc", "co", "inc", "ltd", "dept"];
-
-/// Classifies a lowercased word as a known abbreviation, so callers can decide
-/// from context whether a period directly after it ends the sentence.
+/// Classifies a lowercased word using the English abbreviation lists. Prefer
+/// `LanguageProfile::abbreviation_kind` for locale-aware behavior; the lists
+/// live in the language profiles.
 pub fn abbreviation_kind(word: &str) -> Option<AbbreviationKind> {
-    if TITLE_ABBREVIATIONS.contains(&word) {
-        Some(AbbreviationKind::Title)
-    } else if NUMERIC_ABBREVIATIONS.contains(&word) {
-        Some(AbbreviationKind::Numeric)
-    } else if TRAILING_ABBREVIATIONS.contains(&word) {
-        Some(AbbreviationKind::Trailing)
-    } else {
-        None
-    }
+    crate::lang::profile_for_locale("en").abbreviation_kind(word)
 }
 
-/// Returns `true` for a lowercased word that is a known abbreviation of any
-/// [`AbbreviationKind`].
+/// Returns `true` for a lowercased word that is a known English abbreviation
+/// of any [`AbbreviationKind`].
 pub fn is_abbreviation(word: &str) -> bool {
     abbreviation_kind(word).is_some()
 }

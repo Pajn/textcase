@@ -25,9 +25,10 @@ pub fn capitalize_word_locale(input: &str, locale: &str) -> String {
 ///
 /// Segments are split on hyphens and on an apostrophe that follows a
 /// single-letter prefix (`O'Brien`); an apostrophe inside a contraction
-/// (`don't`) stays within its segment. Each segment is title-cased through ICU,
-/// so locale rules apply — e.g. Dutch `ijssel` becomes `IJssel`.
-pub fn titlecase_word_locale(input: &str, locale: &str) -> String {
+/// (`don't`) stays within its segment. The contraction tails come from the
+/// language profile. Each segment is title-cased through ICU, so locale rules
+/// apply — e.g. Dutch `ijssel` becomes `IJssel`.
+pub fn titlecase_word_locale(input: &str, locale: &str, contraction_tails: &[&str]) -> String {
     let mapper = TitlecaseMapper::new();
     let id = locale_id(locale);
     let options = TitlecaseOptions::default();
@@ -44,7 +45,7 @@ pub fn titlecase_word_locale(input: &str, locale: &str) -> String {
         // a possessive.
         let is_boundary_apostrophe = matches!(grapheme, "'" | "’")
             && letters_in_segment == 1
-            && !is_contraction_suffix(&graphemes[index + 1..]);
+            && !is_contraction_suffix(&graphemes[index + 1..], contraction_tails);
 
         if is_hyphen || is_boundary_apostrophe {
             out.push_str(&mapper.titlecase_segment_to_string(&segment, &id, options));
@@ -63,11 +64,11 @@ pub fn titlecase_word_locale(input: &str, locale: &str) -> String {
     out
 }
 
-/// Whether the graphemes following an apostrophe form a common English
-/// contraction tail. A single-letter prefix plus such a tail is a contraction
-/// ("I'm", "I'll", "I've", "y'all", "o'clock") that must stay one segment,
-/// rather than a name particle like "O'Brien" that opens a new segment.
-fn is_contraction_suffix(rest: &[&str]) -> bool {
+/// Whether the graphemes following an apostrophe form a known contraction
+/// tail. A single-letter prefix plus such a tail is a contraction ("I'm",
+/// "y'all", "o'clock") that must stay one segment, rather than a name particle
+/// like "O'Brien" that opens a new segment.
+fn is_contraction_suffix(rest: &[&str], contraction_tails: &[&str]) -> bool {
     let mut tail = String::new();
     for &grapheme in rest {
         if matches!(grapheme, "-" | "‐" | "‑" | "'" | "’") {
@@ -75,10 +76,7 @@ fn is_contraction_suffix(rest: &[&str]) -> bool {
         }
         tail.push_str(grapheme);
     }
-    matches!(
-        tail.to_lowercase().as_str(),
-        "m" | "ll" | "ve" | "re" | "d" | "s" | "t" | "all" | "clock" | "em"
-    )
+    contraction_tails.contains(&tail.to_lowercase().as_str())
 }
 
 /// Uppercases only the first grapheme, leaving the remainder untouched.

@@ -249,6 +249,25 @@ fn sentence_case_trailing_abbreviations_follow_next_word_casing() {
 }
 
 #[test]
+fn abbreviations_are_locale_specific() {
+    // German "Nr." abbreviates before a number...
+    assert_eq!(
+        sentence_case("siehe nr. 5 bitte", "de"),
+        "Siehe nr. 5 bitte"
+    );
+    // ...and "usw." continues the phrase before a lowercase word.
+    assert_eq!(
+        sentence_case("äpfel, birnen usw. dann gingen wir", "de"),
+        "Äpfel, birnen usw. dann gingen wir"
+    );
+    // English has no "usw."; the period is a real terminal there.
+    assert_eq!(
+        sentence_case("äpfel, birnen usw. dann gingen wir", "en"),
+        "Äpfel, birnen usw. Dann gingen wir"
+    );
+}
+
+#[test]
 fn sentence_case_splits_on_real_terminals() {
     assert_eq!(
         sentence_case("the show ended. everyone left", "en"),

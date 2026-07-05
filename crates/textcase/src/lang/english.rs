@@ -15,6 +15,13 @@ pub fn profile() -> LanguageProfile {
             "the", "to", "vs", "via",
         ],
         lowercase_particles: &["de", "du", "van", "von"],
+        title_abbreviations: &[
+            "mr", "mrs", "ms", "dr", "prof", "st", "sr", "jr", "vs", "feat", "ft", "capt", "sgt",
+            "col", "gen", "gov",
+        ],
+        numeric_abbreviations: &["no", "vol", "fig", "approx"],
+        trailing_abbreviations: &["etc", "co", "inc", "ltd", "dept"],
+        contraction_tails: &["m", "ll", "ve", "re", "d", "s", "t", "all", "clock", "em"],
         ..LanguageProfile::neutral()
     }
 }
