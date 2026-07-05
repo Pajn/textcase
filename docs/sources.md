@@ -19,6 +19,7 @@ textcase lexicon show-license <source> # per-source licensing and setup guidance
 | `musicbrainz` | green | artists, bands, labels, releases, works | music and media titles | URL-driven | `canonical-map`, `multiword-map`, `protected-forms` | none |
 | `discogs` | green | artists, labels, releases from monthly CC0 dumps | deep music catalog coverage beyond MusicBrainz | URL-driven | `canonical-map`, `multiword-map`, `protected-forms` | none |
 | `gleif` | green | legal entity names from the LEI system | company and organization names with authoritative casing | URL-driven | `canonical-map`, `multiword-map`, `protected-forms` | none |
+| `ror` | green | research organization names | universities, institutes, and labs in academic corpora | URL-driven | `canonical-map`, `multiword-map` | none |
 | `geonames` | yellow | country- and world-scale gazetteer names | geographic proper nouns | built-in | `canonical-map`, `multiword-map` | none |
 | `getty` | yellow | art, heritage, and museum vocabulary | museums, artworks, styles, places of culture | URL-driven | `canonical-map`, `multiword-map` | none |
 | `wiktionary` | orange | lexical hints, inflected forms, alternate spellings | optional lexical enrichment and German/common-word recovery | built-in | `word-set`, `ranked-candidates` | `--acknowledge-share-alike` |
@@ -147,6 +148,18 @@ textcase lexicon prepare gleif --input data/raw/gleif-en.xml \
 ```
 
 Note the full file is large (roughly 3 GB of XML for ~3.4 million entities); the daily delta files (`.xml.gz`) are a lighter way to experiment.
+
+### `ror` (URL-driven, green)
+
+Research organization names — universities, institutes, labs — from the CC0 ROR registry, with multilingual labels and aliases (acronyms are deliberately excluded, so "mit" never rewrites to a university name). New dumps are published on [Zenodo](https://doi.org/10.5281/zenodo.6347574) roughly monthly; point `--url` at the zip of the release you want and the v2-schema JSON inside is picked automatically. Complements `orcid` (people) and `gnd` (authority records) for academic corpora.
+
+```bash
+textcase lexicon fetch ror --lang en \
+    --url "https://zenodo.org/records/17953395/files/v1.75-2025-12-09-ror-data.zip" \
+    --output-dir data/raw
+textcase lexicon prepare ror --input data/raw/ror-en.json \
+    --output data/prepared/ror.json --kind multiword-map --lang en
+```
 
 ### `getty` (URL-driven, yellow)
 
