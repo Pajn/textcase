@@ -74,16 +74,19 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
                     previous_word: previous_word.as_deref(),
                     previous_word2: previous_word2.as_deref(),
                 };
-                token.text = if (options.preserve_acronyms
+                // A known canonical form wins over acronym/mixed-case
+                // preservation, so "GITHUB" becomes "GitHub"; an all-caps word
+                // absent from the lexicon ("NASA") is still preserved.
+                let canonical =
+                    options.preserve_known_proper_nouns.then(|| lookup_word(options, &lower));
+                token.text = if let Some(Some(canonical)) = canonical {
+                    canonical
+                } else if (options.preserve_acronyms
                     && !shouting
                     && is_acronym_candidate(&original))
                     || (options.preserve_mixed_case && is_mixed_case(&original))
                 {
                     original
-                } else if options.preserve_known_proper_nouns {
-                    lookup_word(options, &lower).unwrap_or_else(|| {
-                        recase_word(&original, &lower, options, profile, recase_context)
-                    })
                 } else {
                     recase_word(&original, &lower, options, profile, recase_context)
                 };
