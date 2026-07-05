@@ -12,7 +12,10 @@ use crate::{
     },
     lang::{german, profile_for_locale},
     lexicon::{builtin_canonical_form, builtin_canonical_phrase},
-    tokenize::{Token, TokenKind, is_abbreviation, is_sentence_terminal, reconstruct, tokenize},
+    tokenize::{
+        Token, TokenKind, is_abbreviation, is_sentence_terminal, is_wide_sentence_terminal,
+        reconstruct, tokenize,
+    },
     util::{is_acronym_candidate, is_mixed_case, is_shouting},
 };
 
@@ -212,6 +215,13 @@ fn sentence_boundary_flags(tokens: &[Token], locale: &str) -> Vec<bool> {
     for index in 0..tokens.len() {
         let token = &tokens[index];
         if !matches!(token.kind, TokenKind::Punctuation) || !is_sentence_terminal(&token.text) {
+            continue;
+        }
+
+        // Non-Latin terminals are unambiguous and not space-separated, so the
+        // "followed by alphanumeric" guard (for "3.5"/"e.g.") must not apply.
+        if is_wide_sentence_terminal(&token.text) {
+            flags[index] = true;
             continue;
         }
 

@@ -14,6 +14,25 @@ use textcase::{
 };
 
 #[test]
+fn sentence_case_splits_on_cjk_terminals() {
+    // A CJK full stop starts a new sentence even without a following space, so
+    // the next Latin word is capitalized.
+    assert_eq!(
+        sentence_case("你好。hello world", "ja"),
+        "你好。Hello world"
+    );
+    assert_eq!(sentence_case("really？yes indeed", "en"), "Really？Yes indeed");
+}
+
+#[test]
+fn sentence_case_splits_on_devanagari_danda() {
+    assert_eq!(
+        sentence_case("namaste। hello there", "hi"),
+        "Namaste। Hello there"
+    );
+}
+
+#[test]
 fn dutch_titlecases_ij_digraph() {
     // ICU applies the Dutch "IJ" rule for the nl locale...
     assert_eq!(

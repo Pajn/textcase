@@ -1,5 +1,15 @@
 pub fn is_sentence_terminal(text: &str) -> bool {
-    matches!(text, "." | "!" | "?" | "…")
+    matches!(text, "." | "!" | "?" | "…") || is_wide_sentence_terminal(text)
+}
+
+/// Non-Latin sentence terminators (CJK, Arabic, Devanagari). Unlike the ASCII
+/// period these never appear in decimals or abbreviations and are not
+/// space-separated, so callers treat them as unconditional boundaries.
+pub fn is_wide_sentence_terminal(text: &str) -> bool {
+    matches!(
+        text,
+        "。" | "！" | "？" | "｡" | "؟" | "।" | "॥"
+    )
 }
 
 /// Common abbreviations whose trailing period does not end a sentence.
