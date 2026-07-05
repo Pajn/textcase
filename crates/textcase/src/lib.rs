@@ -1,5 +1,6 @@
-//! `textcase` provides conservative sentence and title recasing for Latin-script
-//! languages with optional lexicon plugins for proper-noun restoration.
+// The README is the crate-level documentation, so its examples are compiled
+// and run as doctests and cannot silently go stale.
+#![doc = include_str!("../README.md")]
 
 pub mod case;
 pub mod config;
