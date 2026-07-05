@@ -58,8 +58,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 '“' | '”' | '„' | '«' | '»' | '…' | '—' | '–'
                 // CJK, Arabic and Devanagari terminals and separators.
                 | '。' | '！' | '？' | '｡' | '؟' | '।' | '॥' | '、' | '，' | '：'
-            )
-        {
+            ) {
             TokenKind::Punctuation
         } else {
             TokenKind::Symbol

@@ -80,8 +80,9 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
                 // A known canonical form wins over acronym/mixed-case
                 // preservation, so "GITHUB" becomes "GitHub"; an all-caps word
                 // absent from the lexicon ("NASA") is still preserved.
-                let canonical =
-                    options.preserve_known_proper_nouns.then(|| lookup_word(options, &lower));
+                let canonical = options
+                    .preserve_known_proper_nouns
+                    .then(|| lookup_word(options, &lower));
                 token.text = if let Some(Some(canonical)) = canonical {
                     canonical
                 } else if (options.preserve_acronyms
@@ -226,9 +227,9 @@ fn sentence_boundary_flags(tokens: &[Token], locale: &str) -> Vec<bool> {
             continue;
         }
 
-        let followed_by_alphanumeric = tokens.get(index + 1).is_some_and(|next| {
-            next.text.chars().next().is_some_and(char::is_alphanumeric)
-        });
+        let followed_by_alphanumeric = tokens
+            .get(index + 1)
+            .is_some_and(|next| next.text.chars().next().is_some_and(char::is_alphanumeric));
         if followed_by_alphanumeric {
             continue;
         }

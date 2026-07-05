@@ -6,10 +6,7 @@ pub fn is_sentence_terminal(text: &str) -> bool {
 /// period these never appear in decimals or abbreviations and are not
 /// space-separated, so callers treat them as unconditional boundaries.
 pub fn is_wide_sentence_terminal(text: &str) -> bool {
-    matches!(
-        text,
-        "。" | "！" | "？" | "｡" | "؟" | "।" | "॥"
-    )
+    matches!(text, "。" | "！" | "？" | "｡" | "؟" | "।" | "॥")
 }
 
 /// Common abbreviations whose trailing period does not end a sentence.

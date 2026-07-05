@@ -21,7 +21,10 @@ fn sentence_case_splits_on_cjk_terminals() {
         sentence_case("你好。hello world", "ja"),
         "你好。Hello world"
     );
-    assert_eq!(sentence_case("really？yes indeed", "en"), "Really？Yes indeed");
+    assert_eq!(
+        sentence_case("really？yes indeed", "en"),
+        "Really？Yes indeed"
+    );
 }
 
 #[test]
@@ -125,7 +128,10 @@ fn title_case_keeps_single_letter_contractions() {
         mode: CaseMode::Title,
         ..CaseOptions::default()
     };
-    assert_eq!(convert("i'm i'll i've y'all", &options), "I'm I'll I've Y'all");
+    assert_eq!(
+        convert("i'm i'll i've y'all", &options),
+        "I'm I'll I've Y'all"
+    );
 }
 
 #[test]
