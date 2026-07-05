@@ -1,7 +1,16 @@
-use crate::{config::SubtitleSeparatorStyle, util::collapse_whitespace};
+use crate::{
+    config::SubtitleSeparatorStyle,
+    util::{collapse_whitespace, collapse_whitespace_preserving_newlines},
+};
 
 pub fn normalize_whitespace(input: &str) -> String {
     collapse_whitespace(input)
+}
+
+/// Like [`normalize_whitespace`] but keeps line breaks intact, used for plain
+/// sentence case where multi-line input should stay multi-line.
+pub fn normalize_whitespace_preserving_lines(input: &str) -> String {
+    collapse_whitespace_preserving_newlines(input)
 }
 
 /// Rewrites subtitle separators (`:`, ` - `, ` – `, ` — `) to the requested

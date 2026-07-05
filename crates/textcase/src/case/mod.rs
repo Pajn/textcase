@@ -22,13 +22,26 @@ pub(crate) fn mode_capitalizes_after_subtitle(mode: CaseMode) -> bool {
     matches!(mode, CaseMode::Title | CaseMode::SentenceTitle)
 }
 
-pub(crate) use normalize::{normalize_subtitle_separators, normalize_whitespace};
+/// Whether whitespace normalization flattens line breaks into spaces. The
+/// title-oriented modes produce a single-line result; plain sentence case
+/// keeps multi-line input multi-line.
+pub(crate) fn mode_flattens_lines(mode: CaseMode) -> bool {
+    matches!(mode, CaseMode::Title | CaseMode::SentenceTitle)
+}
+
+pub(crate) use normalize::{
+    normalize_subtitle_separators, normalize_whitespace, normalize_whitespace_preserving_lines,
+};
 pub(crate) use subtitle::should_capitalize_after_separator;
 pub(crate) use title::should_keep_lowercase_in_title;
 
 pub(crate) fn prepare_input(input: &str, options: &CaseOptions<'_>) -> String {
     let whitespace = if options.normalize_whitespace {
-        normalize_whitespace(input)
+        if mode_flattens_lines(options.mode) {
+            normalize_whitespace(input)
+        } else {
+            normalize_whitespace_preserving_lines(input)
+        }
     } else {
         input.to_string()
     };
