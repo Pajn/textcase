@@ -91,6 +91,24 @@ fn sentence_case_ignores_decimal_points() {
 }
 
 #[test]
+fn sentence_case_converts_shouting_titles() {
+    assert_eq!(sentence_case("MY GREAT ALBUM", "en"), "My great album");
+}
+
+#[test]
+fn sentence_case_preserves_acronyms_in_mixed_text() {
+    assert_eq!(
+        sentence_case("NASA launched the probe", "en"),
+        "NASA launched the probe"
+    );
+}
+
+#[test]
+fn sentence_case_recases_stray_single_capital() {
+    assert_eq!(sentence_case("buy A dog", "en"), "Buy a dog");
+}
+
+#[test]
 fn sentence_title_capitalizes_after_subtitle_separator() {
     let options = CaseOptions {
         locale: "en",

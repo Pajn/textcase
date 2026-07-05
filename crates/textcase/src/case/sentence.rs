@@ -10,7 +10,7 @@ use crate::{
     lang::{german, profile_for_locale},
     lexicon::{builtin_canonical_form, builtin_canonical_phrase},
     tokenize::{Token, TokenKind, is_abbreviation, is_sentence_terminal, reconstruct, tokenize},
-    util::{is_all_caps, is_mixed_case},
+    util::{is_acronym_candidate, is_mixed_case, is_shouting},
 };
 
 #[derive(Clone, Copy)]
@@ -30,6 +30,9 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
     }
 
     let profile = profile_for_locale(options.locale);
+    // When the entire input is capitalized it is a shouting title, not a
+    // sequence of acronyms, so acronym preservation must not block conversion.
+    let shouting = is_shouting(&prepared);
     let sentence_boundaries = sentence_boundary_flags(&tokens, options.locale);
     let word_indices: Vec<usize> = tokens
         .iter()
@@ -62,7 +65,9 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
                     previous_word: previous_word.as_deref(),
                     previous_word2: previous_word2.as_deref(),
                 };
-                token.text = if (options.preserve_acronyms && is_all_caps(&original))
+                token.text = if (options.preserve_acronyms
+                    && !shouting
+                    && is_acronym_candidate(&original))
                     || (options.preserve_mixed_case && is_mixed_case(&original))
                 {
                     original
