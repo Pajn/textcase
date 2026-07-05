@@ -2,15 +2,21 @@ use std::collections::HashSet;
 
 use crate::{
     case::{
-        mode_is_sentence_like, mode_is_title, prepare_input, should_capitalize_after_separator,
-        should_keep_lowercase_in_title,
+        mode_capitalizes_after_subtitle, mode_is_sentence_like, mode_is_title, prepare_input,
+        should_capitalize_after_separator, should_keep_lowercase_in_title,
     },
     config::{CaseMode, CaseOptions},
-    icu::{capitalize_word_locale, lowercase_locale, titlecase_word_locale},
+    icu::{
+        capitalize_word_locale, lowercase_locale, primary_language, titlecase_word_locale,
+        uppercase_first_grapheme,
+    },
     lang::{german, profile_for_locale},
     lexicon::{builtin_canonical_form, builtin_canonical_phrase},
-    tokenize::{Token, TokenKind, is_sentence_terminal, reconstruct, tokenize},
-    util::{is_all_caps, is_mixed_case},
+    tokenize::{
+        Token, TokenKind, is_abbreviation, is_sentence_terminal, is_wide_sentence_terminal,
+        reconstruct, tokenize,
+    },
+    util::{is_acronym_candidate, is_mixed_case, is_shouting},
 };
 
 #[derive(Clone, Copy)]
@@ -30,6 +36,10 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
     }
 
     let profile = profile_for_locale(options.locale);
+    // When the entire input is capitalized it is a shouting title, not a
+    // sequence of acronyms, so acronym preservation must not block conversion.
+    let shouting = is_shouting(&prepared);
+    let sentence_boundaries = sentence_boundary_flags(&tokens, options.locale);
     let word_indices: Vec<usize> = tokens
         .iter()
         .enumerate()
@@ -46,14 +56,23 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
     let mut after_subtitle = false;
     let mut previous_word: Option<String> = None;
     let mut previous_word2: Option<String> = None;
+    let mut sentence_start_words: HashSet<usize> = HashSet::new();
 
     for (index, token) in tokens.iter_mut().enumerate() {
         match token.kind {
             TokenKind::Word => {
-                let original = token.text.clone();
+                // Move the word out rather than clone: token.text is reassigned
+                // below before the arm ends, so the empty placeholder left here
+                // is never observed.
+                let original = std::mem::take(&mut token.text);
                 let lower = lowercase_locale(&original, options.locale);
                 let at_sentence_cap = sentence_start
-                    || (after_subtitle && options.capitalize_after_subtitle_separator);
+                    || (after_subtitle
+                        && options.capitalize_after_subtitle_separator
+                        && mode_capitalizes_after_subtitle(options.mode));
+                if at_sentence_cap {
+                    sentence_start_words.insert(index);
+                }
                 let is_edge = edge_words.contains(&index);
                 let recase_context = RecaseContext {
                     should_capitalize: at_sentence_cap,
@@ -61,14 +80,20 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
                     previous_word: previous_word.as_deref(),
                     previous_word2: previous_word2.as_deref(),
                 };
-                token.text = if (options.preserve_acronyms && is_all_caps(&original))
+                // A known canonical form wins over acronym/mixed-case
+                // preservation, so "GITHUB" becomes "GitHub"; an all-caps word
+                // absent from the lexicon ("NASA") is still preserved.
+                let canonical = options
+                    .preserve_known_proper_nouns
+                    .then(|| lookup_word(options, &lower));
+                token.text = if let Some(Some(canonical)) = canonical {
+                    canonical
+                } else if (options.preserve_acronyms
+                    && !shouting
+                    && is_acronym_candidate(&original))
                     || (options.preserve_mixed_case && is_mixed_case(&original))
                 {
                     original
-                } else if options.preserve_known_proper_nouns {
-                    lookup_word(options, &lower).unwrap_or_else(|| {
-                        recase_word(&original, &lower, options, profile, recase_context)
-                    })
                 } else {
                     recase_word(&original, &lower, options, profile, recase_context)
                 };
@@ -78,7 +103,7 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
                 previous_word = Some(lower);
             }
             TokenKind::Punctuation => {
-                if is_sentence_terminal(&token.text) {
+                if sentence_boundaries[index] {
                     sentence_start = true;
                 }
                 if should_capitalize_after_separator(
@@ -87,13 +112,21 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
                 ) {
                     after_subtitle = true;
                 }
+                // Punctuation breaks an article/preposition-to-noun bond, so the
+                // German noun heuristic must not read context across it.
+                previous_word = None;
+                previous_word2 = None;
             }
-            TokenKind::Whitespace | TokenKind::Symbol => {}
+            TokenKind::Symbol => {
+                previous_word = None;
+                previous_word2 = None;
+            }
+            TokenKind::Whitespace => {}
         }
     }
 
     if options.preserve_known_proper_nouns {
-        apply_phrase_replacements(&mut tokens, options);
+        apply_phrase_replacements(&mut tokens, options, &sentence_start_words);
     }
 
     reconstruct(&tokens)
@@ -131,7 +164,7 @@ fn recase_word(
     profile: crate::lang::LanguageProfile,
     recase_context: RecaseContext<'_>,
 ) -> String {
-    if options.locale.starts_with("de")
+    if primary_language(options.locale) == "de"
         && let Some(restored) = german::recase_token(
             original,
             lower,
@@ -141,14 +174,29 @@ fn recase_word(
             options.lexicons,
         )
     {
-        return restored;
+        // The German recase decides letter case for the word body, but a
+        // sentence- or subtitle-initial word (and title edge words) must still
+        // start with a capital, so compose the two rather than short-circuit.
+        let needs_capital = (mode_is_sentence_like(options.mode)
+            && recase_context.should_capitalize)
+            || (mode_is_title(options.mode)
+                && (recase_context.should_capitalize || recase_context.is_edge_word));
+        return if needs_capital {
+            uppercase_first_grapheme(&restored, options.locale)
+        } else {
+            restored
+        };
     }
 
     if mode_is_title(options.mode) {
-        if should_keep_lowercase_in_title(profile, lower, recase_context.is_edge_word) {
-            lowercase_locale(original, options.locale)
-        } else {
+        // A word that opens the title or a subtitle segment is always
+        // capitalized, even when it is a stop word ("Something: The Reckoning").
+        if recase_context.should_capitalize
+            || !should_keep_lowercase_in_title(profile, lower, recase_context.is_edge_word)
+        {
             titlecase_word_locale(original, options.locale)
+        } else {
+            lowercase_locale(original, options.locale)
         }
     } else if mode_is_sentence_like(options.mode) {
         if recase_context.should_capitalize {
@@ -161,6 +209,51 @@ fn recase_word(
     }
 }
 
+/// Marks which punctuation tokens are true sentence terminals.
+///
+/// A terminal that is immediately followed by an alphanumeric character (the
+/// internal dots of `e.g.` or `3.5`) does not start a new sentence, and a
+/// period directly after an abbreviation or a single-letter initial is skipped
+/// as well.
+fn sentence_boundary_flags(tokens: &[Token], locale: &str) -> Vec<bool> {
+    let mut flags = vec![false; tokens.len()];
+    for index in 0..tokens.len() {
+        let token = &tokens[index];
+        if !matches!(token.kind, TokenKind::Punctuation) || !is_sentence_terminal(&token.text) {
+            continue;
+        }
+
+        // Non-Latin terminals are unambiguous and not space-separated, so the
+        // "followed by alphanumeric" guard (for "3.5"/"e.g.") must not apply.
+        if is_wide_sentence_terminal(&token.text) {
+            flags[index] = true;
+            continue;
+        }
+
+        let followed_by_alphanumeric = tokens
+            .get(index + 1)
+            .is_some_and(|next| next.text.chars().next().is_some_and(char::is_alphanumeric));
+        if followed_by_alphanumeric {
+            continue;
+        }
+
+        if token.text == "." && index > 0 && matches!(tokens[index - 1].kind, TokenKind::Word) {
+            let previous = lowercase_locale(&tokens[index - 1].text, locale);
+            if is_abbreviation(&previous) || is_single_letter(&previous) {
+                continue;
+            }
+        }
+
+        flags[index] = true;
+    }
+    flags
+}
+
+fn is_single_letter(word: &str) -> bool {
+    let mut chars = word.chars();
+    matches!((chars.next(), chars.next()), (Some(first), None) if first.is_alphabetic())
+}
+
 fn lookup_word(options: &CaseOptions<'_>, lower: &str) -> Option<String> {
     if let Some(builtin) = builtin_canonical_form(lower) {
         return Some(builtin.to_string());
@@ -170,7 +263,11 @@ fn lookup_word(options: &CaseOptions<'_>, lower: &str) -> Option<String> {
         .and_then(|provider| provider.canonical_form(options.locale, lower))
 }
 
-fn apply_phrase_replacements(tokens: &mut [Token], options: &CaseOptions<'_>) {
+fn apply_phrase_replacements(
+    tokens: &mut [Token],
+    options: &CaseOptions<'_>,
+    sentence_start_words: &HashSet<usize>,
+) {
     let word_indices: Vec<usize> = tokens
         .iter()
         .enumerate()
@@ -205,6 +302,13 @@ fn apply_phrase_replacements(tokens: &mut [Token], options: &CaseOptions<'_>) {
         if let Some((span_len, canonical)) = matched {
             let first = word_indices[cursor];
             let last = word_indices[cursor + span_len - 1];
+            // A canonical phrase can begin with a lowercase particle ("van der
+            // Waals"); force a capital when the span starts a sentence.
+            let canonical = if sentence_start_words.contains(&first) {
+                uppercase_first_grapheme(&canonical, options.locale)
+            } else {
+                canonical
+            };
             tokens[first].text = canonical;
             for token in &mut tokens[first + 1..=last] {
                 token.text.clear();
