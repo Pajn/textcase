@@ -11,6 +11,18 @@ description = "Command-line tooling for textcase lexicons and plugins"
 name = "textcase"
 path = "src/main.rs"
 
+# Lets `cargo binstall textcase-cli` resolve the prebuilt binaries that
+# release.yml uploads to the GitHub release for each `vX.Y.Z` tag. The archive
+# names and layout here must match what upload-rust-binary-action produces.
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/textcase-{ target }.tar.gz"
+bin-dir = "textcase{ binary-ext }"
+pkg-fmt = "tgz"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-url = "{ repo }/releases/download/v{ version }/textcase-{ target }.zip"
+pkg-fmt = "zip"
+
 [dependencies]
 clap.workspace = true
 flate2.workspace = true

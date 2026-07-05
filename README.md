@@ -2,7 +2,7 @@
 
 `textcase` is a Rust workspace for multilingual sentence/title recasing in Latin-script languages.
 
-Current MSRV is `1.85`. The workspace currently exposes no optional Cargo features; new features should only be added when they clearly preserve a usable zero-plugin default and keep licensing boundaries explicit.
+Current MSRV is `1.88`. The workspace currently exposes no optional Cargo features; new features should only be added when they clearly preserve a usable zero-plugin default and keep licensing boundaries explicit.
 
 It provides:
 
@@ -33,6 +33,22 @@ let options = CaseOptions {
     ..CaseOptions::default()
 };
 assert_eq!(convert("the rise of github - inside rust tooling", &options), "The rise of GitHub: Inside Rust tooling");
+```
+
+## Installing the CLI
+
+Install prebuilt binaries with [`cargo binstall`](https://github.com/cargo-bins/cargo-binstall) (no compilation; downloads the release artifact for your platform):
+
+```bash
+cargo binstall textcase-cli
+```
+
+Prebuilt binaries are published for Linux (x86_64, aarch64), macOS (x86_64, aarch64), and Windows (x86_64). Both commands install the `textcase` binary; note the crate to install is `textcase-cli`.
+
+To build from source instead:
+
+```bash
+cargo install textcase-cli
 ```
 
 ## CLI quickstart
