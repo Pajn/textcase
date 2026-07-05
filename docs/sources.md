@@ -17,6 +17,7 @@ textcase lexicon show-license <source> # per-source licensing and setup guidance
 | `gnd` | green | authority names for persons, places, works, and institutions | German and European proper nouns | URL-driven | `canonical-map`, `multiword-map`, `protected-forms` | none |
 | `orcid` | green | researcher names and affiliations | academic corpora and author lists | URL-driven | `canonical-map`, `multiword-map` | none |
 | `musicbrainz` | green | artists, bands, labels, releases, works | music and media titles | URL-driven | `canonical-map`, `multiword-map`, `protected-forms` | none |
+| `discogs` | green | artists, labels, releases from monthly CC0 dumps | deep music catalog coverage beyond MusicBrainz | URL-driven | `canonical-map`, `multiword-map`, `protected-forms` | none |
 | `geonames` | yellow | country- and world-scale gazetteer names | geographic proper nouns | built-in | `canonical-map`, `multiword-map` | none |
 | `getty` | yellow | art, heritage, and museum vocabulary | museums, artworks, styles, places of culture | URL-driven | `canonical-map`, `multiword-map` | none |
 | `wiktionary` | orange | lexical hints, inflected forms, alternate spellings | optional lexical enrichment and German/common-word recovery | built-in | `word-set`, `ranked-candidates` | `--acknowledge-share-alike` |
@@ -115,6 +116,18 @@ Artist, release, work, and recording names from MusicBrainz search results or si
 ```bash
 textcase lexicon fetch musicbrainz --lang en \
     --url "https://musicbrainz.org/ws/2/artist?query=artist:Kraftwerk&fmt=json" --output-dir data/raw
+```
+
+### `discogs` (URL-driven, green)
+
+Artist, label, master, and release names from the Discogs monthly data dumps, published under CC0. Deeper catalog coverage than MusicBrainz for labels and electronic music; the two combine well. The dump URL carries its date — pick the current month's file from [data.discogs.com](https://data.discogs.com/); the artists and labels dumps are the useful ones for recasing.
+
+```bash
+textcase lexicon fetch discogs --lang en \
+    --url "https://discogs-data-dumps.s3.us-west-2.amazonaws.com/data/2025/discogs_20250601_artists.xml.gz" \
+    --output-dir data/raw
+textcase lexicon prepare discogs --input data/raw/discogs-en.xml.gz \
+    --output data/prepared/discogs-artists.json --kind protected-forms --lang en
 ```
 
 ### `getty` (URL-driven, yellow)
