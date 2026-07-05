@@ -8,8 +8,17 @@ pub fn lowercase_locale(input: &str, locale: &str) -> String {
         .into_owned()
 }
 
+/// Capitalizes a word for sentence-start position: the first cased character is
+/// upper-cased and the rest lower-cased, treating the whole word as one segment.
+///
+/// Unlike [`titlecase_word_locale`] this does *not* split on hyphens or
+/// apostrophes, so `re-enter` becomes `Re-enter` and `jean-paul` becomes
+/// `Jean-paul` — sentence case capitalizes only the first letter of the
+/// sentence. Locale rules still apply (Dutch `ijssel` → `IJssel`).
 pub fn capitalize_word_locale(input: &str, locale: &str) -> String {
-    titlecase_word_locale(input, locale)
+    TitlecaseMapper::new()
+        .titlecase_segment_to_string(input, &locale_id(locale), TitlecaseOptions::default())
+        .into_owned()
 }
 
 /// Title-cases a single word, capitalizing the first letter of each segment.
