@@ -1,4 +1,5 @@
 mod dbpedia;
+mod discogs;
 mod geonames;
 mod getty;
 mod gnd;
@@ -26,6 +27,7 @@ use crate::{
 pub enum SourceId {
     Wikidata,
     Geonames,
+    Discogs,
     UdGermanGsd,
     Gnd,
     Orcid,
@@ -41,6 +43,7 @@ impl fmt::Display for SourceId {
         let value = match self {
             SourceId::Wikidata => "wikidata",
             SourceId::Geonames => "geonames",
+            SourceId::Discogs => "discogs",
             SourceId::UdGermanGsd => "ud-german-gsd",
             SourceId::Gnd => "gnd",
             SourceId::Orcid => "orcid",
@@ -95,6 +98,12 @@ pub struct SourceRecord {
     pub score: f32,
 }
 
+/// Whether `value` mixes letter cases (`iPhone`, `LaTeX`), a signal that a
+/// name carries intentional brand casing worth scoring above plain words.
+pub(super) fn is_mixed_case(value: &str) -> bool {
+    value.chars().any(char::is_lowercase) && value.chars().any(char::is_uppercase)
+}
+
 pub struct FetchPlan {
     pub urls: Vec<String>,
     pub source_url: String,
@@ -112,6 +121,11 @@ const GND_KINDS: &[PreparedKind] = &[
 ];
 const ORCID_KINDS: &[PreparedKind] = &[PreparedKind::CanonicalMap, PreparedKind::MultiwordMap];
 const MUSICBRAINZ_KINDS: &[PreparedKind] = &[
+    PreparedKind::CanonicalMap,
+    PreparedKind::MultiwordMap,
+    PreparedKind::ProtectedForms,
+];
+const DISCOGS_KINDS: &[PreparedKind] = &[
     PreparedKind::CanonicalMap,
     PreparedKind::MultiwordMap,
     PreparedKind::ProtectedForms,
@@ -150,6 +164,20 @@ const DESCRIPTORS: &[SourceDescriptor] = &[
         docs_anchor: "#geonames",
         purpose: "geographical names and alternates",
         bundling_policy: "external plugin only with attribution guidance",
+    },
+    SourceDescriptor {
+        id: SourceId::Discogs,
+        display_name: "Discogs",
+        class: SourceClass::Green,
+        license_name: "CC0",
+        license_summary: "CC0 monthly dumps of artists, labels, and releases",
+        acknowledgement_flag: None,
+        recommended: true,
+        plugin_kinds: DISCOGS_KINDS,
+        domain_tags: &["music", "media"],
+        docs_anchor: "#discogs",
+        purpose: "music artist, label, and release names",
+        bundling_policy: "external plugin only",
     },
     SourceDescriptor {
         id: SourceId::UdGermanGsd,
@@ -302,6 +330,7 @@ pub fn suggested_output_name(source: SourceId, suffix: &str) -> String {
         SourceId::Geonames => "tsv",
         SourceId::UdGermanGsd => "conllu",
         SourceId::Wiktionary => "jsonl.gz",
+        SourceId::Discogs => "xml.gz",
         _ => "json",
     };
     format!("{}-{}.{}", source, suffix.to_lowercase(), extension)
@@ -391,6 +420,9 @@ pub fn fetch_guidance(source: SourceId) -> &'static str {
         SourceId::Openstreetmap => {
             "URL-driven; point --url at a Nominatim JSON search scoped to the locality set you need, and acknowledge ODbL"
         }
+        SourceId::Discogs => {
+            "URL-driven; point --url at a monthly dump from data.discogs.com, e.g. https://discogs-data-dumps.s3.us-west-2.amazonaws.com/data/2025/discogs_20250601_artists.xml.gz (the URL carries the dump date)"
+        }
     }
 }
 
@@ -434,6 +466,7 @@ pub fn validate_source_bytes(
 ) -> Result<(), Box<dyn std::error::Error>> {
     match source {
         SourceId::Geonames => geonames::validate(bytes),
+        SourceId::Discogs => discogs::validate(bytes),
         SourceId::UdGermanGsd => ud_german_gsd::validate(bytes),
         SourceId::Wikidata => {
             wikidata::parse(bytes, None)?;
@@ -476,6 +509,7 @@ pub fn sample_payload(
     match source {
         SourceId::Wikidata => wikidata::sample(lang),
         SourceId::Geonames => geonames::sample(country),
+        SourceId::Discogs => discogs::sample(lang),
         SourceId::UdGermanGsd => ud_german_gsd::sample(),
         SourceId::Gnd => gnd::sample(lang),
         SourceId::Orcid => orcid::sample(lang),
@@ -502,6 +536,7 @@ pub fn prepare_source(
     let records = match source {
         SourceId::Wikidata => wikidata::parse(bytes, lang)?,
         SourceId::Geonames => geonames::parse(bytes)?,
+        SourceId::Discogs => discogs::parse(bytes)?,
         SourceId::UdGermanGsd => ud_german_gsd::parse(bytes)?,
         SourceId::Gnd => gnd::parse(bytes)?,
         SourceId::Orcid => orcid::parse(bytes)?,
