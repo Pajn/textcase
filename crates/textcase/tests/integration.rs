@@ -166,6 +166,34 @@ fn sentence_case_does_not_split_on_abbreviations() {
 }
 
 #[test]
+fn sentence_case_numeric_abbreviations_require_a_number() {
+    // "no." is an abbreviation only directly before a number...
+    assert_eq!(
+        sentence_case("she wrote no. 5 on the door", "en"),
+        "She wrote no. 5 on the door"
+    );
+    // ...elsewhere it is ordinary prose and its period ends the sentence.
+    assert_eq!(
+        sentence_case("the answer is no. it was clear", "en"),
+        "The answer is no. It was clear"
+    );
+}
+
+#[test]
+fn sentence_case_trailing_abbreviations_follow_next_word_casing() {
+    // Mid-phrase, "inc." continues the sentence...
+    assert_eq!(
+        sentence_case("we sued acme inc. yesterday it settled", "en"),
+        "We sued acme inc. yesterday it settled"
+    );
+    // ...but a capitalized next word marks a real sentence end after "etc.".
+    assert_eq!(
+        sentence_case("apples, pears, etc. Then we left", "en"),
+        "Apples, pears, etc. Then we left"
+    );
+}
+
+#[test]
 fn sentence_case_splits_on_real_terminals() {
     assert_eq!(
         sentence_case("the show ended. everyone left", "en"),
