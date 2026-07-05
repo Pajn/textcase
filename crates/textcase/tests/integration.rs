@@ -132,6 +132,20 @@ fn sentence_title_still_capitalizes_after_colon() {
 }
 
 #[test]
+fn title_case_capitalizes_first_word_after_colon() {
+    let options = CaseOptions {
+        locale: "en",
+        mode: CaseMode::Title,
+        subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
+        ..CaseOptions::default()
+    };
+    assert_eq!(
+        convert("something: the reckoning", &options),
+        "Something: The Reckoning"
+    );
+}
+
+#[test]
 fn subtitle_normalization_ignores_numeric_ranges() {
     let options = CaseOptions {
         locale: "en",

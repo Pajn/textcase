@@ -170,10 +170,14 @@ fn recase_word(
     }
 
     if mode_is_title(options.mode) {
-        if should_keep_lowercase_in_title(profile, lower, recase_context.is_edge_word) {
-            lowercase_locale(original, options.locale)
-        } else {
+        // A word that opens the title or a subtitle segment is always
+        // capitalized, even when it is a stop word ("Something: The Reckoning").
+        if recase_context.should_capitalize
+            || !should_keep_lowercase_in_title(profile, lower, recase_context.is_edge_word)
+        {
             titlecase_word_locale(original, options.locale)
+        } else {
+            lowercase_locale(original, options.locale)
         }
     } else if mode_is_sentence_like(options.mode) {
         if recase_context.should_capitalize {
