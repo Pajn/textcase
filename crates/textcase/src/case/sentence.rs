@@ -61,7 +61,10 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
     for (index, token) in tokens.iter_mut().enumerate() {
         match token.kind {
             TokenKind::Word => {
-                let original = token.text.clone();
+                // Move the word out rather than clone: token.text is reassigned
+                // below before the arm ends, so the empty placeholder left here
+                // is never observed.
+                let original = std::mem::take(&mut token.text);
                 let lower = lowercase_locale(&original, options.locale);
                 let at_sentence_cap = sentence_start
                     || (after_subtitle
