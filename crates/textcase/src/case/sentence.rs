@@ -10,7 +10,7 @@ use crate::{
         capitalize_word_locale, lowercase_locale, primary_language, titlecase_word_locale,
         uppercase_first_grapheme,
     },
-    lang::{german, profile_for_locale},
+    lang::{english_always_capitalized, german, profile_for_locale},
     lexicon::{builtin_canonical_form, builtin_canonical_phrase},
     tokenize::{
         AbbreviationKind, Token, TokenKind, abbreviation_kind, is_sentence_terminal,
@@ -43,6 +43,8 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
     let sentence_ids = token_sentence_ids(&sentence_boundaries);
     let sentence_shouting =
         sentence_shouting_flags(&tokens, &sentence_ids, profile, options.locale);
+    let sentence_title_like =
+        sentence_title_like_flags(&tokens, &sentence_ids, profile, options.locale);
     let word_indices: Vec<usize> = tokens
         .iter()
         .enumerate()
@@ -96,6 +98,17 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
                     && is_acronym_candidate(&original))
                     || (options.preserve_mixed_case && is_mixed_case(&original))
                 {
+                    original
+                } else if options.preserve_existing_capitals
+                    && mode_is_sentence_like(options.mode)
+                    && !at_sentence_cap
+                    && !sentence_shouting[sentence_ids[index]]
+                    && !sentence_title_like[sentence_ids[index]]
+                    && is_simple_capitalized(&original)
+                {
+                    // A lone capitalized word in an otherwise lowercase
+                    // sentence is an unknown proper noun; lowercasing it
+                    // would destroy information no lexicon can restore.
                     original
                 } else {
                     recase_word(&original, &lower, options, profile, recase_context)
@@ -199,7 +212,9 @@ fn recase_word(
             lowercase_locale(original, options.locale)
         }
     } else if mode_is_sentence_like(options.mode) {
-        if recase_context.should_capitalize {
+        let always_capitalized =
+            primary_language(options.locale) == "en" && english_always_capitalized(lower);
+        if recase_context.should_capitalize || always_capitalized {
             capitalize_word_locale(original, options.locale)
         } else {
             lowercase_locale(original, options.locale)
@@ -333,6 +348,57 @@ fn sentence_shouting_flags(
             has_caps_word[id] && (all_caps[id] || (caps_or_stop_word[id] && has_long_caps_word[id]))
         })
         .collect()
+}
+
+/// Whether each sentence looks like title-cased input: every word after the
+/// sentence-initial one either carries a capital or is a stop word, with at
+/// least two carrying capitals. In such input capitalization is a formatting
+/// artifact, not a proper-noun signal, so nothing is preserved from it.
+fn sentence_title_like_flags(
+    tokens: &[Token],
+    sentence_ids: &[usize],
+    profile: crate::lang::LanguageProfile,
+    locale: &str,
+) -> Vec<bool> {
+    let sentence_count = sentence_ids.last().map_or(0, |last| last + 1);
+    let mut saw_initial_word = vec![false; sentence_count];
+    let mut rest_conforms = vec![true; sentence_count];
+    let mut capitalized_words = vec![0usize; sentence_count];
+
+    for (index, token) in tokens.iter().enumerate() {
+        if !token.is_word() || !token.text.chars().any(char::is_alphabetic) {
+            continue;
+        }
+        let id = sentence_ids[index];
+        if !saw_initial_word[id] {
+            saw_initial_word[id] = true;
+            continue;
+        }
+        if token.text.chars().any(char::is_uppercase) {
+            capitalized_words[id] += 1;
+        } else {
+            let lower = lowercase_locale(&token.text, locale);
+            if !profile.keeps_lowercase_in_title(&lower)
+                && !profile.keeps_particle_lowercase(&lower)
+            {
+                rest_conforms[id] = false;
+            }
+        }
+    }
+
+    (0..sentence_count)
+        .map(|id| rest_conforms[id] && capitalized_words[id] >= 2)
+        .collect()
+}
+
+/// A word like "Alice": a leading capital, at least two letters, and no
+/// further capitals (internal capitals are mixed case, handled separately).
+fn is_simple_capitalized(word: &str) -> bool {
+    let mut chars = word.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    first.is_uppercase() && chars.clone().any(char::is_alphabetic) && !chars.any(char::is_uppercase)
 }
 
 /// A period that belongs to a `..`/`...` run is ellipsis punctuation, not a

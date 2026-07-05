@@ -35,6 +35,10 @@ pub struct CaseOptions<'a> {
     pub preserve_acronyms: bool,
     pub preserve_mixed_case: bool,
     pub preserve_known_proper_nouns: bool,
+    /// Keeps a capitalized mid-sentence word ("Alice") capitalized in the
+    /// sentence modes. Capitals carry no signal in shouted or fully
+    /// title-cased sentences, so those are still recased.
+    pub preserve_existing_capitals: bool,
     pub normalize_whitespace: bool,
     pub german_mode: GermanMode,
     pub lexicons: Option<&'a dyn LexiconProvider>,
@@ -59,6 +63,7 @@ impl Default for CaseOptions<'static> {
             preserve_acronyms: true,
             preserve_mixed_case: true,
             preserve_known_proper_nouns: true,
+            preserve_existing_capitals: true,
             normalize_whitespace: true,
             german_mode: GermanMode::Conservative,
             lexicons: None,
