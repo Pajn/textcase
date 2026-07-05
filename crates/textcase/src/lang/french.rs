@@ -7,6 +7,7 @@ pub fn profile() -> LanguageProfile {
             "à", "au", "aux", "de", "des", "du", "et", "la", "le", "les", "ou",
         ],
         lowercase_particles: &["de", "des", "du", "la", "le", "les", "d’", "l’"],
+        title_abbreviations: &["dr", "prof", "st", "ste", "mme", "mlle"],
         ..LanguageProfile::neutral()
     }
 }
