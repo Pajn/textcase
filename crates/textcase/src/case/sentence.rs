@@ -102,8 +102,16 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
                 ) {
                     after_subtitle = true;
                 }
+                // Punctuation breaks an article/preposition-to-noun bond, so the
+                // German noun heuristic must not read context across it.
+                previous_word = None;
+                previous_word2 = None;
             }
-            TokenKind::Whitespace | TokenKind::Symbol => {}
+            TokenKind::Symbol => {
+                previous_word = None;
+                previous_word2 = None;
+            }
+            TokenKind::Whitespace => {}
         }
     }
 
