@@ -34,6 +34,9 @@ pub fn profile_for_locale(locale: &str) -> LanguageProfile {
         "az" => azerbaijani::profile(),
         "lt" => lithuanian::profile(),
         "de" => german::profile(),
-        _ => english::profile(),
+        "en" => english::profile(),
+        // An unknown language gets the neutral profile: applying English stop
+        // words and particles to it would be a guess, not a default.
+        _ => LanguageProfile::neutral(),
     }
 }

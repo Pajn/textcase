@@ -15,9 +15,6 @@ pub fn profile() -> LanguageProfile {
             "the", "to", "vs", "via",
         ],
         lowercase_particles: &["de", "du", "van", "von"],
-        noun_articles: &[],
-        noun_prepositions: &[],
-        noun_suffixes: &[],
-        ambiguous_lowercase: &[],
+        ..LanguageProfile::neutral()
     }
 }
