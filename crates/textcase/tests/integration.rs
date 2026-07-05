@@ -39,6 +39,34 @@ fn sentence_case_preserves_internal_capitals() {
 }
 
 #[test]
+fn sentence_case_keeps_contractions_intact() {
+    assert_eq!(
+        sentence_case("don't stop me now", "en"),
+        "Don't stop me now"
+    );
+}
+
+#[test]
+fn sentence_case_recases_quoted_known_forms() {
+    // The trailing quote must not be glued onto the word, or the lexicon
+    // lookup for "github" fails.
+    assert_eq!(
+        sentence_case("she said 'github' loudly", "en"),
+        "She said 'GitHub' loudly"
+    );
+}
+
+#[test]
+fn title_case_capitalizes_single_letter_apostrophe_prefix() {
+    let options = CaseOptions {
+        locale: "en",
+        mode: CaseMode::Title,
+        ..CaseOptions::default()
+    };
+    assert_eq!(convert("the o'brien files", &options), "The O'Brien Files");
+}
+
+#[test]
 fn sentence_title_capitalizes_after_subtitle_separator() {
     let options = CaseOptions {
         locale: "en",

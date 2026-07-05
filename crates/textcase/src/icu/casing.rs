@@ -22,10 +22,24 @@ pub fn capitalize_word_locale(input: &str, locale: &str) -> String {
 pub fn titlecase_word_locale(input: &str, locale: &str) -> String {
     let mut out = String::new();
     let mut capitalize_next = true;
+    // Number of letters emitted in the current segment since the last boundary,
+    // used to decide whether an apostrophe introduces a new capital.
+    let mut segment_len = 0usize;
     for grapheme in UnicodeSegmentation::graphemes(input, true) {
-        if matches!(grapheme, "-" | "‐" | "‑" | "'" | "’") {
+        if matches!(grapheme, "-" | "‐" | "‑") {
             out.push_str(grapheme);
             capitalize_next = true;
+            segment_len = 0;
+            continue;
+        }
+
+        if matches!(grapheme, "'" | "’") {
+            out.push_str(grapheme);
+            // Capitalize after an apostrophe only for a single-letter prefix
+            // (O'Brien, D'Angelo), never for contractions ("don't") or
+            // possessives ("James'").
+            capitalize_next = segment_len == 1;
+            segment_len = 0;
             continue;
         }
 
@@ -35,6 +49,7 @@ pub fn titlecase_word_locale(input: &str, locale: &str) -> String {
         } else {
             out.push_str(&lowercase_locale(grapheme, locale));
         }
+        segment_len += 1;
     }
     out
 }
