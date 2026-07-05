@@ -11,7 +11,7 @@ use crate::{
         uppercase_first_grapheme,
     },
     lang::{english_always_capitalized, german, profile_for_locale},
-    lexicon::{builtin_canonical_form, builtin_canonical_phrase},
+    lexicon::{builtin_canonical_form, builtin_canonical_phrase, builtin_form_is_ambiguous},
     tokenize::{
         AbbreviationKind, Token, TokenKind, abbreviation_kind, is_sentence_terminal,
         is_wide_sentence_terminal, reconstruct, tokenize,
@@ -88,9 +88,16 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
                 // A known canonical form wins over acronym/mixed-case
                 // preservation, so "GITHUB" becomes "GitHub"; an all-caps word
                 // absent from the lexicon ("NASA") is still preserved.
+                // Titles always carry the signal; elsewhere the input must
+                // have cased the word itself, in a sentence where capitals
+                // mean something.
+                let casing_signal = mode_is_title(options.mode)
+                    || (original != lower
+                        && !sentence_shouting[sentence_ids[index]]
+                        && !sentence_title_like[sentence_ids[index]]);
                 let canonical = options
                     .preserve_known_proper_nouns
-                    .then(|| lookup_word(options, &lower));
+                    .then(|| lookup_word(options, &lower, casing_signal));
                 token.text = if let Some(Some(canonical)) = canonical {
                     canonical
                 } else if (options.preserve_acronyms
@@ -432,13 +439,21 @@ fn is_single_letter(word: &str) -> bool {
     matches!((chars.next(), chars.next()), (Some(first), None) if first.is_alphabetic())
 }
 
-fn lookup_word(options: &CaseOptions<'_>, lower: &str) -> Option<String> {
-    if let Some(builtin) = builtin_canonical_form(lower) {
-        return Some(builtin.to_string());
-    }
-    options
+/// Looks up a canonical form, letting a user lexicon override the builtin
+/// entries. An ambiguous builtin form ("rust") is only restored when the
+/// input carried a casing signal for the word.
+fn lookup_word(options: &CaseOptions<'_>, lower: &str, casing_signal: bool) -> Option<String> {
+    if let Some(from_provider) = options
         .lexicons
         .and_then(|provider| provider.canonical_form(options.locale, lower))
+    {
+        return Some(from_provider);
+    }
+    let builtin = builtin_canonical_form(lower)?;
+    if builtin_form_is_ambiguous(lower) && !casing_signal {
+        return None;
+    }
+    Some(builtin.to_string())
 }
 
 fn apply_phrase_replacements(
@@ -464,13 +479,11 @@ fn apply_phrase_replacements(
                 continue;
             }
             let phrase = build_phrase_key(tokens, span, options.locale);
-            let canonical = builtin_canonical_phrase(&phrase)
-                .map(str::to_owned)
-                .or_else(|| {
-                    options
-                        .lexicons
-                        .and_then(|provider| provider.canonical_phrase(options.locale, &phrase))
-                });
+            // The user lexicon overrides the builtin phrases as well.
+            let canonical = options
+                .lexicons
+                .and_then(|provider| provider.canonical_phrase(options.locale, &phrase))
+                .or_else(|| builtin_canonical_phrase(&phrase).map(str::to_owned));
             if let Some(canonical) = canonical {
                 matched = Some((span_len, canonical));
                 break;
