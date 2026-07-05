@@ -8,6 +8,9 @@ pub fn profile() -> LanguageProfile {
         ],
         lowercase_particles: &["de", "des", "du", "la", "le", "les", "d’", "l’"],
         title_abbreviations: &["dr", "prof", "st", "ste", "mme", "mlle"],
+        elision_prefixes: &[
+            "l", "d", "j", "n", "m", "t", "s", "c", "qu", "jusqu", "lorsqu", "puisqu", "quoiqu",
+        ],
         ..LanguageProfile::neutral()
     }
 }

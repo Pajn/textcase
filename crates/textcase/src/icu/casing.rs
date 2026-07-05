@@ -24,11 +24,18 @@ pub fn capitalize_word_locale(input: &str, locale: &str) -> String {
 /// Title-cases a single word, capitalizing the first letter of each segment.
 ///
 /// Segments are split on hyphens and on an apostrophe that follows a
-/// single-letter prefix (`O'Brien`); an apostrophe inside a contraction
-/// (`don't`) stays within its segment. The contraction tails come from the
-/// language profile. Each segment is title-cased through ICU, so locale rules
-/// apply — e.g. Dutch `ijssel` becomes `IJssel`.
-pub fn titlecase_word_locale(input: &str, locale: &str, contraction_tails: &[&str]) -> String {
+/// single-letter prefix (`O'Brien`) or an elided particle (`d'affaires`); an
+/// apostrophe inside a contraction (`don't`) stays within its segment. The
+/// contraction tails and elision prefixes come from the language profile. An
+/// elided particle stays lowercase (`d'Affaires`); other segments are
+/// title-cased through ICU, so locale rules apply — e.g. Dutch `ijssel`
+/// becomes `IJssel`.
+pub fn titlecase_word_locale(
+    input: &str,
+    locale: &str,
+    contraction_tails: &[&str],
+    elision_prefixes: &[&str],
+) -> String {
     let mapper = TitlecaseMapper::new();
     let id = locale_id(locale);
     let options = TitlecaseOptions::default();
@@ -40,15 +47,23 @@ pub fn titlecase_word_locale(input: &str, locale: &str, contraction_tails: &[&st
 
     for (index, &grapheme) in graphemes.iter().enumerate() {
         let is_hyphen = matches!(grapheme, "-" | "‐" | "‑");
-        // An apostrophe opens a new segment after a single-letter prefix
-        // (O'Brien), but not inside a contraction ("don't", "I'm", "y'all") or
-        // a possessive.
-        let is_boundary_apostrophe = matches!(grapheme, "'" | "’")
-            && letters_in_segment == 1
-            && !is_contraction_suffix(&graphemes[index + 1..], contraction_tails);
+        let is_apostrophe = matches!(grapheme, "'" | "’");
+        let is_elision =
+            is_apostrophe && elision_prefixes.contains(&segment.to_lowercase().as_str());
+        // An apostrophe opens a new segment after an elided particle
+        // ("l'homme", "qu'elle") or a single-letter prefix (O'Brien), but not
+        // inside a contraction ("don't", "I'm", "y'all") or a possessive.
+        let is_boundary_apostrophe = is_apostrophe
+            && (is_elision
+                || (letters_in_segment == 1
+                    && !is_contraction_suffix(&graphemes[index + 1..], contraction_tails)));
 
         if is_hyphen || is_boundary_apostrophe {
-            out.push_str(&mapper.titlecase_segment_to_string(&segment, &id, options));
+            if is_elision {
+                out.push_str(&CaseMapper::new().lowercase_to_string(&segment, &id));
+            } else {
+                out.push_str(&mapper.titlecase_segment_to_string(&segment, &id, options));
+            }
             out.push_str(grapheme);
             segment.clear();
             letters_in_segment = 0;
