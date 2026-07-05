@@ -6,6 +6,7 @@ license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 description = "Command-line tooling for textcase lexicons and plugins"
+readme = "README.md"
 
 [[bin]]
 name = "textcase"

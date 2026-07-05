@@ -1,30 +1,45 @@
 # textcase
 
-`textcase` is a Rust workspace for multilingual sentence/title recasing in Latin-script languages.
+Multilingual sentence and title recasing for Latin-script languages.
 
-Current MSRV is `1.88`. The workspace currently exposes no optional Cargo features; new features should only be added when they clearly preserve a usable zero-plugin default and keep licensing boundaries explicit.
-
-It provides:
-
-- a `textcase` library with sentence/title conversion, locale-aware casing helpers, language profiles, German heuristic modes, and pluggable lexicons
-- a `textcase` CLI for listing sources, showing licensing guidance, fetching upstream data, preparing lexicons, building JSON/FST plugins, and inspecting plugin metadata
-- explicit licensing boundaries so the core crate remains usable with zero external data while optional plugins add better proper-noun and lexical recovery
-
-## Workspace layout
-
-- `crates/textcase`: core library
-- `crates/textcase-cli`: CLI tooling (`textcase` binary)
-- `docs/`: architecture, plugin, source, licensing, German, and performance notes
-- `examples/`: top-level usage examples mirroring the crate examples
-- `tests/fixtures/`: fixture space for integration and e2e inputs
-
-## Library quickstart
+`textcase` takes text with wrong or missing capitalization — lowercase feeds, SHOUTED titles, Title Cased Prose — and recases it the way the target language would write it. It is conservative by design: capitalization that carries information (acronyms, `iPhone`-style casing, mid-sentence proper nouns) is preserved, and optional lexicon plugins restore canonical forms the input has lost.
 
 ```rust
-use textcase::{sentence_case, CaseMode, CaseOptions, SubtitleSeparatorStyle, convert};
+use textcase::sentence_case;
 
-let plain = sentence_case("the rise of github - inside rust tooling", "en");
-assert_eq!(plain, "The rise of GitHub - inside Rust tooling");
+assert_eq!(
+    sentence_case("BREAKING NEWS. the NASA probe landed", "en"),
+    "Breaking news. The NASA probe landed"
+);
+```
+
+The workspace ships two crates:
+
+- [`textcase`](crates/textcase/) — the library: conversion modes, language profiles, and plugin loading. Start with its [README](crates/textcase/README.md).
+- [`textcase-cli`](crates/textcase-cli/) — the `textcase` binary for building and inspecting lexicon plugins from public data sources. It is tooling for plugin production, not a text-recasing command. Start with its [README](crates/textcase-cli/README.md).
+
+## What it covers
+
+- **Three modes**: sentence case, sentence case with capitalized subtitles (`Title: Like this`), and full title case with per-language stop words.
+- **Sentence boundary detection** that understands abbreviations (`Dr.`, `No. 5`, `usw.`), decimals, initials, ellipses, and CJK/Arabic/Devanagari terminals.
+- **Preservation of meaningful casing**: acronyms (`NASA`), mixed case (`iPhone`, `McDonald`), and capitalized mid-sentence words (`Alice`) survive conversion; fully shouted or title-cased input is still normalized.
+- **Language profiles** for English, German, French, Spanish, Portuguese, Italian, Dutch, Swedish, Danish, Norwegian, Finnish, Turkish, Azerbaijani, and Lithuanian — stop words, particles, abbreviations, and elision rules per language, with a neutral fallback for everything else. Locale-aware casing itself (Turkish `İ`, Dutch `IJ`, Greek final sigma) goes through ICU.
+- **German noun recovery** in three tiers (conservative, balanced, aggressive) — see [docs/german.md](docs/german.md).
+- **Lexicon plugins** (JSON or FST) that restore canonical proper-noun forms (`github` → `GitHub`, `new york` → `New York`) from sources you choose and license-check yourself.
+
+Out of scope: grammar-aware analysis, non-Latin-script recasing (CJK terminals only delimit sentences), and markup handling — feed it plain text.
+
+## Quickstart
+
+Library ([full guide](crates/textcase/README.md)):
+
+```rust
+use textcase::{CaseMode, CaseOptions, SubtitleSeparatorStyle, convert, sentence_case};
+
+assert_eq!(
+    sentence_case("the rise of github - inside rust tooling", "en"),
+    "The rise of GitHub - inside rust tooling"
+);
 
 let options = CaseOptions {
     locale: "en",
@@ -32,82 +47,51 @@ let options = CaseOptions {
     subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
     ..CaseOptions::default()
 };
-assert_eq!(convert("the rise of github - inside rust tooling", &options), "The rise of GitHub: Inside Rust tooling");
+assert_eq!(
+    convert("the rise of github - inside rust tooling", &options),
+    "The rise of GitHub: Inside rust tooling"
+);
 ```
 
-## Installing the CLI
-
-Install prebuilt binaries with [`cargo binstall`](https://github.com/cargo-bins/cargo-binstall) (no compilation; downloads the release artifact for your platform):
+CLI ([full guide](crates/textcase-cli/README.md)):
 
 ```bash
-cargo binstall textcase-cli
-```
+cargo binstall textcase-cli   # or: cargo install textcase-cli
 
-Prebuilt binaries are published for Linux (x86_64, aarch64), macOS (x86_64, aarch64), and Windows (x86_64). Both commands install the `textcase` binary; note the crate to install is `textcase-cli`.
-
-To build from source instead:
-
-```bash
-cargo install textcase-cli
-```
-
-## CLI quickstart
-
-```bash
 textcase lexicon list-sources
-textcase lexicon show-license geonames
 textcase lexicon fetch geonames --country DE --output-dir data/raw
-textcase lexicon prepare geonames --input data/raw/geonames-de.tsv --output data/prepared/geonames-de.json --kind canonical-map --lang de
-textcase lexicon build-plugin data/prepared/geonames-de.json --format fst --output data/plugins/geonames-de.tclx
-textcase lexicon inspect-plugin data/plugins/geonames-de.tclx
+textcase lexicon prepare geonames --input data/raw/geonames-de.tsv \
+    --output data/prepared/geonames-de.json --kind canonical-map --lang de
+textcase lexicon build-plugin data/prepared/geonames-de.json --format fst \
+    --output data/plugins/geonames-de.tclx
 ```
 
-For opt-in lexical support, a complete built-in Wiktionary workflow is also available:
+## Documentation map
 
-```bash
-textcase lexicon show-license wiktionary
-textcase lexicon fetch wiktionary --lang de --acknowledge-share-alike --output-dir data/raw
-textcase lexicon prepare wiktionary --input data/raw/wiktionary-de.jsonl.gz --output data/prepared/wiktionary-de.json --kind word-set --lang de --acknowledge-share-alike
-```
+| Read | When you want to |
+| --- | --- |
+| [crates/textcase/README.md](crates/textcase/README.md) | use the library: modes, options, behavior, loading plugins |
+| [crates/textcase-cli/README.md](crates/textcase-cli/README.md) | build lexicon plugins with the CLI |
+| [docs/sources.md](docs/sources.md) | choose a data source and follow its fetch/prepare workflow |
+| [docs/german.md](docs/german.md) | understand the German heuristic tiers |
+| [docs/plugin-format.md](docs/plugin-format.md) | read or emit the JSON/FST plugin containers yourself |
+| [docs/licensing-policy.md](docs/licensing-policy.md) | understand the green/yellow/orange source classes |
+| [docs/architecture.md](docs/architecture.md) | contribute: how the crates and modules fit together |
+| [docs/performance.md](docs/performance.md) | run the benchmarks and see current numbers |
 
-`fetch` has built-in workflows for `geonames`, `ud-german-gsd`, and `wiktionary`.
+## Workspace layout
 
-The remaining sources are intentionally URL-driven because their upstreams are query-oriented APIs rather than single canonical dumps. The setup guide in `docs/sources.md` explains what each source provides, when to use it, and the exact endpoint style to pass with `--url`.
+- `crates/textcase`: core library
+- `crates/textcase-cli`: CLI tooling (`textcase` binary)
+- `docs/`: topic guides (see the map above)
+- `examples/`: top-level usage examples mirroring the crate examples
+- `tests/fixtures/`: fixture space for integration and e2e inputs
 
-## Choosing a source
+## Development
 
-Start with the cleanly redistributable proper-noun sources:
-
-- `wikidata` for multilingual entities and aliases
-- `gnd` for authority-style German and European names
-- `orcid` for researcher names
-- `musicbrainz` for artists, albums, labels, and works
-
-Add domain-specific sources as needed:
-
-- `geonames` for country- or world-scale place names
-- `getty` for art, heritage, and museum vocabularies
-- `openstreetmap` for street- and locality-level geography
-- `wiktionary` for lexical hints and inflected forms
-- `ud-german-gsd` for German ranked-candidate enrichment
-
-The full source selection and setup guide lives in `docs/sources.md`.
-
-## Source classes
-
-- `green`: clean redistribution story (`wikidata`, `gnd`, `orcid`, `musicbrainz`)
-- `yellow`: attribution guidance required (`geonames`, `getty`)
-- `orange`: stronger obligations and opt-in-only workflows (`wiktionary`, `dbpedia`, `openstreetmap`, `ud-german-gsd`)
-
-## Development guardrails
+Current MSRV is `1.88`. The workspace exposes no optional Cargo features; new features should only be added when they clearly preserve a usable zero-plugin default and keep licensing boundaries explicit.
 
 - format with `cargo fmt --all`
 - lint with `cargo clippy --workspace --all-targets -- -D warnings`
 - test with `cargo test --workspace`
 - CI runs the same checks on pushes and pull requests
-
-## German modes
-
-- `Conservative`: sentence starts, subtitle starts, lexicon restoration, acronym protection
-- `Balanced`: adds noun-context heuristics
-- `Aggressive`: adds ranked-candidate plugin integration on top of balanced heuristics
