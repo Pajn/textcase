@@ -6,6 +6,7 @@ license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 description = "Multilingual sentence/title recasing for Latin-script languages"
+readme = "README.md"
 
 [dependencies]
 fst.workspace = true
