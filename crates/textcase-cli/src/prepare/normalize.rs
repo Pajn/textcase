@@ -1,3 +1,5 @@
+use unicode_normalization::UnicodeNormalization;
+
 use crate::sources::SourceRecord;
 
 /// Lookup entries for a record, guarding against text rewrites.
@@ -40,10 +42,14 @@ fn matches_folded(alias: &str, canonical: &(String, String)) -> bool {
 /// Folds a name two ways: diacritics stripped to base letters ("ü" → "u") and
 /// diacritics expanded Germanic-style ("ü" → "ue"). Both forms are lowercase
 /// with punctuation and whitespace removed.
+///
+/// Input is composed to NFC first, so a decomposed diacritic (base letter plus
+/// a combining mark, as some sources emit) folds the same as its precomposed
+/// form rather than losing the mark to the non-alphanumeric filter.
 fn folded_forms(input: &str) -> (String, String) {
     let mut stripped = String::with_capacity(input.len());
     let mut transliterated = String::with_capacity(input.len());
-    for ch in input.chars().flat_map(char::to_lowercase) {
+    for ch in input.nfc().flat_map(char::to_lowercase) {
         if !ch.is_alphanumeric() {
             continue;
         }
@@ -108,6 +114,10 @@ mod tests {
     fn detects_spelling_variants() {
         assert!(is_spelling_variant("bjork", "Björk"));
         assert!(is_spelling_variant("Muenchen", "München"));
+        // Decomposed (NFD) input folds the same as the precomposed form: here
+        // "München" is spelled with a combining diaeresis (u + U+0308).
+        assert!(is_spelling_variant("Muenchen", "Mu\u{0308}nchen"));
+        assert!(is_spelling_variant("Bjo\u{0308}rk", "Björk"));
         assert!(is_spelling_variant("Sao Paulo", "São Paulo"));
         assert!(is_spelling_variant("NWA", "N.W.A"));
         assert!(is_spelling_variant("cote d'ivoire", "Côte d'Ivoire"));
