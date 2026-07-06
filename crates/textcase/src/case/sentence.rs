@@ -3,20 +3,20 @@ use std::collections::HashSet;
 use crate::{
     case::{
         mode_capitalizes_after_subtitle, mode_is_sentence_like, mode_is_title, prepare_input,
-        should_capitalize_after_separator, should_keep_lowercase_in_title,
+        should_keep_lowercase_in_title, subtitle_separator_flags,
     },
     config::{CaseMode, CaseOptions},
     icu::{
         capitalize_word_locale, lowercase_locale, primary_language, titlecase_word_locale,
         uppercase_first_grapheme,
     },
-    lang::{german, profile_for_locale},
-    lexicon::{builtin_canonical_form, builtin_canonical_phrase},
+    lang::{english_always_capitalized, german, profile_for_locale},
+    lexicon::{builtin_canonical_form, builtin_canonical_phrase, builtin_form_is_ambiguous},
     tokenize::{
-        Token, TokenKind, is_abbreviation, is_sentence_terminal, is_wide_sentence_terminal,
+        AbbreviationKind, Token, TokenKind, is_sentence_terminal, is_wide_sentence_terminal,
         reconstruct, tokenize,
     },
-    util::{is_acronym_candidate, is_mixed_case, is_shouting},
+    util::{is_acronym_candidate, is_mixed_case},
 };
 
 #[derive(Clone, Copy)]
@@ -36,10 +36,15 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
     }
 
     let profile = profile_for_locale(options.locale);
-    // When the entire input is capitalized it is a shouting title, not a
+    let sentence_boundaries = sentence_boundary_flags(&tokens, options.locale, profile);
+    let subtitle_separators = subtitle_separator_flags(&tokens);
+    // When a whole sentence is capitalized it is a shouted title, not a
     // sequence of acronyms, so acronym preservation must not block conversion.
-    let shouting = is_shouting(&prepared);
-    let sentence_boundaries = sentence_boundary_flags(&tokens, options.locale);
+    let sentence_ids = token_sentence_ids(&sentence_boundaries);
+    let sentence_shouting =
+        sentence_shouting_flags(&tokens, &sentence_ids, profile, options.locale);
+    let sentence_title_like =
+        sentence_title_like_flags(&tokens, &sentence_ids, profile, options.locale);
     let word_indices: Vec<usize> = tokens
         .iter()
         .enumerate()
@@ -83,16 +88,34 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
                 // A known canonical form wins over acronym/mixed-case
                 // preservation, so "GITHUB" becomes "GitHub"; an all-caps word
                 // absent from the lexicon ("NASA") is still preserved.
+                // Titles always carry the signal; elsewhere the input must
+                // have cased the word itself, in a sentence where capitals
+                // mean something.
+                let casing_signal = mode_is_title(options.mode)
+                    || (original != lower
+                        && !sentence_shouting[sentence_ids[index]]
+                        && !sentence_title_like[sentence_ids[index]]);
                 let canonical = options
                     .preserve_known_proper_nouns
-                    .then(|| lookup_word(options, &lower));
+                    .then(|| lookup_word(options, &lower, casing_signal));
                 token.text = if let Some(Some(canonical)) = canonical {
                     canonical
                 } else if (options.preserve_acronyms
-                    && !shouting
+                    && !sentence_shouting[sentence_ids[index]]
                     && is_acronym_candidate(&original))
                     || (options.preserve_mixed_case && is_mixed_case(&original))
                 {
+                    original
+                } else if options.preserve_existing_capitals
+                    && mode_is_sentence_like(options.mode)
+                    && !at_sentence_cap
+                    && !sentence_shouting[sentence_ids[index]]
+                    && !sentence_title_like[sentence_ids[index]]
+                    && is_simple_capitalized(&original)
+                {
+                    // A lone capitalized word in an otherwise lowercase
+                    // sentence is an unknown proper noun; lowercasing it
+                    // would destroy information no lexicon can restore.
                     original
                 } else {
                     recase_word(&original, &lower, options, profile, recase_context)
@@ -106,10 +129,7 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
                 if sentence_boundaries[index] {
                     sentence_start = true;
                 }
-                if should_capitalize_after_separator(
-                    options.capitalize_after_subtitle_separator,
-                    &token.text,
-                ) {
+                if options.capitalize_after_subtitle_separator && subtitle_separators[index] {
                     after_subtitle = true;
                 }
                 // Punctuation breaks an article/preposition-to-noun bond, so the
@@ -194,12 +214,27 @@ fn recase_word(
         if recase_context.should_capitalize
             || !should_keep_lowercase_in_title(profile, lower, recase_context.is_edge_word)
         {
-            titlecase_word_locale(original, options.locale)
+            let cased = titlecase_word_locale(
+                original,
+                options.locale,
+                profile.contraction_tails,
+                profile.elision_prefixes,
+            );
+            // An elided particle stays lowercase mid-title ("d'Affaires"),
+            // but a title-opening or edge word still starts with a capital
+            // ("L'Homme").
+            if recase_context.should_capitalize || recase_context.is_edge_word {
+                uppercase_first_grapheme(&cased, options.locale)
+            } else {
+                cased
+            }
         } else {
             lowercase_locale(original, options.locale)
         }
     } else if mode_is_sentence_like(options.mode) {
-        if recase_context.should_capitalize {
+        let always_capitalized =
+            primary_language(options.locale) == "en" && english_always_capitalized(lower);
+        if recase_context.should_capitalize || always_capitalized {
             capitalize_word_locale(original, options.locale)
         } else {
             lowercase_locale(original, options.locale)
@@ -215,7 +250,11 @@ fn recase_word(
 /// internal dots of `e.g.` or `3.5`) does not start a new sentence, and a
 /// period directly after an abbreviation or a single-letter initial is skipped
 /// as well.
-fn sentence_boundary_flags(tokens: &[Token], locale: &str) -> Vec<bool> {
+fn sentence_boundary_flags(
+    tokens: &[Token],
+    locale: &str,
+    profile: crate::lang::LanguageProfile,
+) -> Vec<bool> {
     let mut flags = vec![false; tokens.len()];
     for index in 0..tokens.len() {
         let token = &tokens[index];
@@ -230,17 +269,40 @@ fn sentence_boundary_flags(tokens: &[Token], locale: &str) -> Vec<bool> {
             continue;
         }
 
-        let followed_by_alphanumeric = tokens
-            .get(index + 1)
-            .is_some_and(|next| next.text.chars().next().is_some_and(char::is_alphanumeric));
-        if followed_by_alphanumeric {
+        // An ellipsis usually trails off mid-sentence rather than ending it,
+        // so it only starts a new sentence when the input already capitalizes
+        // the next word.
+        if token.text == "…" || is_ellipsis_period(tokens, index) {
+            if tokens.get(index + 1).is_some_and(|next| next.text == ".") {
+                // Interior dot of a "..." run; the run's last dot decides.
+                continue;
+            }
+            flags[index] = next_word_is_capitalized(tokens, index);
             continue;
         }
 
-        if token.text == "." && index > 0 && matches!(tokens[index - 1].kind, TokenKind::Word) {
-            let previous = lowercase_locale(&tokens[index - 1].text, locale);
-            if is_abbreviation(&previous) || is_single_letter(&previous) {
+        if token.text == "." {
+            // Only the period is ambiguous with decimals ("3.5") and internal
+            // abbreviation dots ("e.g."); "!" and "?" end the sentence even
+            // without a following space.
+            let followed_by_alphanumeric = tokens
+                .get(index + 1)
+                .is_some_and(|next| next.text.chars().next().is_some_and(char::is_alphanumeric));
+            if followed_by_alphanumeric {
                 continue;
+            }
+
+            if index > 0 && matches!(tokens[index - 1].kind, TokenKind::Word) {
+                let previous = lowercase_locale(&tokens[index - 1].text, locale);
+                let suppressed = match profile.abbreviation_kind(&previous) {
+                    Some(AbbreviationKind::Title) => true,
+                    Some(AbbreviationKind::Numeric) => next_word_starts_with_digit(tokens, index),
+                    Some(AbbreviationKind::Trailing) => !next_word_is_capitalized(tokens, index),
+                    None => is_single_letter(&previous),
+                };
+                if suppressed {
+                    continue;
+                }
             }
         }
 
@@ -249,18 +311,166 @@ fn sentence_boundary_flags(tokens: &[Token], locale: &str) -> Vec<bool> {
     flags
 }
 
+/// Assigns each token the index of the sentence it belongs to; a boundary
+/// terminal closes its own sentence.
+fn token_sentence_ids(boundaries: &[bool]) -> Vec<usize> {
+    let mut ids = Vec::with_capacity(boundaries.len());
+    let mut current = 0;
+    for &boundary in boundaries {
+        ids.push(current);
+        if boundary {
+            current += 1;
+        }
+    }
+    ids
+}
+
+/// Whether each sentence is written in capitals (a shouted title) rather than
+/// containing isolated acronyms.
+///
+/// A sentence is shouting when every word is all-caps, or when the only
+/// lowercase words are stop words and at least one all-caps word has five or
+/// more letters. That converts "NEW YORK vs THE WORLD" while keeping the short
+/// all-caps words of "USA vs USSR" as acronyms.
+fn sentence_shouting_flags(
+    tokens: &[Token],
+    sentence_ids: &[usize],
+    profile: crate::lang::LanguageProfile,
+    locale: &str,
+) -> Vec<bool> {
+    let sentence_count = sentence_ids.last().map_or(0, |last| last + 1);
+    let mut all_caps = vec![true; sentence_count];
+    let mut caps_or_stop_word = vec![true; sentence_count];
+    let mut has_caps_word = vec![false; sentence_count];
+    let mut has_long_caps_word = vec![false; sentence_count];
+
+    for (index, token) in tokens.iter().enumerate() {
+        if !token.is_word() || !token.text.chars().any(char::is_alphabetic) {
+            continue;
+        }
+        let id = sentence_ids[index];
+        let word_is_all_caps = !token.text.chars().any(char::is_lowercase);
+        if word_is_all_caps {
+            has_caps_word[id] = true;
+            let letters = token.text.chars().filter(|ch| ch.is_alphabetic()).count();
+            if letters >= 5 {
+                has_long_caps_word[id] = true;
+            }
+        } else {
+            all_caps[id] = false;
+            let lower = lowercase_locale(&token.text, locale);
+            if !profile.keeps_lowercase_in_title(&lower)
+                && !profile.keeps_particle_lowercase(&lower)
+            {
+                caps_or_stop_word[id] = false;
+            }
+        }
+    }
+
+    (0..sentence_count)
+        .map(|id| {
+            has_caps_word[id] && (all_caps[id] || (caps_or_stop_word[id] && has_long_caps_word[id]))
+        })
+        .collect()
+}
+
+/// Whether each sentence looks like title-cased input: every word after the
+/// sentence-initial one either carries a capital or is a stop word, with at
+/// least two carrying capitals. In such input capitalization is a formatting
+/// artifact, not a proper-noun signal, so nothing is preserved from it.
+fn sentence_title_like_flags(
+    tokens: &[Token],
+    sentence_ids: &[usize],
+    profile: crate::lang::LanguageProfile,
+    locale: &str,
+) -> Vec<bool> {
+    let sentence_count = sentence_ids.last().map_or(0, |last| last + 1);
+    let mut saw_initial_word = vec![false; sentence_count];
+    let mut rest_conforms = vec![true; sentence_count];
+    let mut capitalized_words = vec![0usize; sentence_count];
+
+    for (index, token) in tokens.iter().enumerate() {
+        if !token.is_word() || !token.text.chars().any(char::is_alphabetic) {
+            continue;
+        }
+        let id = sentence_ids[index];
+        if !saw_initial_word[id] {
+            saw_initial_word[id] = true;
+            continue;
+        }
+        if token.text.chars().any(char::is_uppercase) {
+            capitalized_words[id] += 1;
+        } else {
+            let lower = lowercase_locale(&token.text, locale);
+            if !profile.keeps_lowercase_in_title(&lower)
+                && !profile.keeps_particle_lowercase(&lower)
+            {
+                rest_conforms[id] = false;
+            }
+        }
+    }
+
+    (0..sentence_count)
+        .map(|id| rest_conforms[id] && capitalized_words[id] >= 2)
+        .collect()
+}
+
+/// A word like "Alice": a leading capital, at least two letters, and no
+/// further capitals (internal capitals are mixed case, handled separately).
+fn is_simple_capitalized(word: &str) -> bool {
+    let mut chars = word.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    first.is_uppercase() && chars.clone().any(char::is_alphabetic) && !chars.any(char::is_uppercase)
+}
+
+/// A period that belongs to a `..`/`...` run is ellipsis punctuation, not a
+/// full stop.
+fn is_ellipsis_period(tokens: &[Token], index: usize) -> bool {
+    tokens[index].text == "."
+        && (index
+            .checked_sub(1)
+            .is_some_and(|previous| tokens[previous].text == ".")
+            || tokens.get(index + 1).is_some_and(|next| next.text == "."))
+}
+
+/// Whether the input already capitalizes the first word after `index`,
+/// skipping whitespace and intervening punctuation such as quotes.
+fn next_word_is_capitalized(tokens: &[Token], index: usize) -> bool {
+    tokens[index + 1..]
+        .iter()
+        .find(|token| token.is_word())
+        .is_some_and(|token| token.text.chars().next().is_some_and(char::is_uppercase))
+}
+
+fn next_word_starts_with_digit(tokens: &[Token], index: usize) -> bool {
+    tokens[index + 1..]
+        .iter()
+        .find(|token| token.is_word())
+        .is_some_and(|token| token.text.chars().next().is_some_and(char::is_numeric))
+}
+
 fn is_single_letter(word: &str) -> bool {
     let mut chars = word.chars();
     matches!((chars.next(), chars.next()), (Some(first), None) if first.is_alphabetic())
 }
 
-fn lookup_word(options: &CaseOptions<'_>, lower: &str) -> Option<String> {
-    if let Some(builtin) = builtin_canonical_form(lower) {
-        return Some(builtin.to_string());
-    }
-    options
+/// Looks up a canonical form, letting a user lexicon override the builtin
+/// entries. An ambiguous builtin form ("rust") is only restored when the
+/// input carried a casing signal for the word.
+fn lookup_word(options: &CaseOptions<'_>, lower: &str, casing_signal: bool) -> Option<String> {
+    if let Some(from_provider) = options
         .lexicons
         .and_then(|provider| provider.canonical_form(options.locale, lower))
+    {
+        return Some(from_provider);
+    }
+    let builtin = builtin_canonical_form(lower)?;
+    if builtin_form_is_ambiguous(lower) && !casing_signal {
+        return None;
+    }
+    Some(builtin.to_string())
 }
 
 fn apply_phrase_replacements(
@@ -286,13 +496,11 @@ fn apply_phrase_replacements(
                 continue;
             }
             let phrase = build_phrase_key(tokens, span, options.locale);
-            let canonical = builtin_canonical_phrase(&phrase)
-                .map(str::to_owned)
-                .or_else(|| {
-                    options
-                        .lexicons
-                        .and_then(|provider| provider.canonical_phrase(options.locale, &phrase))
-                });
+            // The user lexicon overrides the builtin phrases as well.
+            let canonical = options
+                .lexicons
+                .and_then(|provider| provider.canonical_phrase(options.locale, &phrase))
+                .or_else(|| builtin_canonical_phrase(&phrase).map(str::to_owned));
             if let Some(canonical) = canonical {
                 matched = Some((span_len, canonical));
                 break;

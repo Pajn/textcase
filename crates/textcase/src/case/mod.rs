@@ -32,7 +32,7 @@ pub(crate) fn mode_flattens_lines(mode: CaseMode) -> bool {
 pub(crate) use normalize::{
     normalize_subtitle_separators, normalize_whitespace, normalize_whitespace_preserving_lines,
 };
-pub(crate) use subtitle::should_capitalize_after_separator;
+pub(crate) use subtitle::subtitle_separator_flags;
 pub(crate) use title::should_keep_lowercase_in_title;
 
 pub(crate) fn prepare_input(input: &str, options: &CaseOptions<'_>) -> String {

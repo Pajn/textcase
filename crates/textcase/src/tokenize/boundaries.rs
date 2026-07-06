@@ -9,16 +9,33 @@ pub fn is_wide_sentence_terminal(text: &str) -> bool {
     matches!(text, "。" | "！" | "？" | "｡" | "؟" | "।" | "॥")
 }
 
-/// Common abbreviations whose trailing period does not end a sentence.
-const ABBREVIATIONS: &[&str] = &[
-    "mr", "mrs", "ms", "dr", "prof", "st", "sr", "jr", "vs", "etc", "no", "vol", "feat", "ft",
-    "approx", "dept", "fig", "co", "inc", "ltd", "gen", "gov", "capt", "sgt", "col",
-];
+/// How a trailing period after an abbreviation affects sentence detection.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AbbreviationKind {
+    /// Titles and connectives followed by a name or a continuing phrase
+    /// ("Dr. Smith", "Kramer vs. Kramer"); the period never ends the sentence.
+    Title,
+    /// Forms only abbreviated directly before a number ("No. 5", "vol. 2",
+    /// "fig. 3"); anywhere else the word is ordinary prose ("the answer is
+    /// no.") and the period is a real terminal.
+    Numeric,
+    /// Forms that can close a phrase or a whole sentence ("Acme Inc.",
+    /// "etc."); the period ends the sentence when the input capitalizes the
+    /// next word.
+    Trailing,
+}
 
-/// Returns `true` for a lowercased word that is a known abbreviation, so a
-/// period directly after it is not treated as a sentence boundary.
+/// Classifies a lowercased word using the English abbreviation lists. Prefer
+/// `LanguageProfile::abbreviation_kind` for locale-aware behavior; the lists
+/// live in the language profiles.
+pub fn abbreviation_kind(word: &str) -> Option<AbbreviationKind> {
+    crate::lang::profile_for_locale("en").abbreviation_kind(word)
+}
+
+/// Returns `true` for a lowercased word that is a known English abbreviation
+/// of any [`AbbreviationKind`].
 pub fn is_abbreviation(word: &str) -> bool {
-    ABBREVIATIONS.contains(&word)
+    abbreviation_kind(word).is_some()
 }
 
 pub fn is_subtitle_separator(text: &str) -> bool {

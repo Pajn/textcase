@@ -7,9 +7,10 @@ pub fn profile() -> LanguageProfile {
             "à", "au", "aux", "de", "des", "du", "et", "la", "le", "les", "ou",
         ],
         lowercase_particles: &["de", "des", "du", "la", "le", "les", "d’", "l’"],
-        noun_articles: &[],
-        noun_prepositions: &[],
-        noun_suffixes: &[],
-        ambiguous_lowercase: &[],
+        title_abbreviations: &["dr", "prof", "st", "ste", "mme", "mlle"],
+        elision_prefixes: &[
+            "l", "d", "j", "n", "m", "t", "s", "c", "qu", "jusqu", "lorsqu", "puisqu", "quoiqu",
+        ],
+        ..LanguageProfile::neutral()
     }
 }

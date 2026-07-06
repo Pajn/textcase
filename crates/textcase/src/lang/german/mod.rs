@@ -21,5 +21,9 @@ pub fn profile() -> LanguageProfile {
         noun_prepositions: contexts::PREPOSITIONS,
         noun_suffixes: heuristics::NOUN_SUFFIXES,
         ambiguous_lowercase: ambiguity::AMBIGUOUS_LOWERCASE,
+        title_abbreviations: &["dr", "prof", "hr", "fr", "st"],
+        numeric_abbreviations: &["nr", "bd", "ca"],
+        trailing_abbreviations: &["usw", "bzw", "ggf", "evtl", "etc"],
+        ..LanguageProfile::neutral()
     }
 }

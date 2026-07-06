@@ -7,9 +7,9 @@ pub fn profile() -> LanguageProfile {
             "a", "da", "de", "del", "della", "di", "e", "il", "in", "la", "le", "lo",
         ],
         lowercase_particles: &["da", "de", "del", "della", "di"],
-        noun_articles: &[],
-        noun_prepositions: &[],
-        noun_suffixes: &[],
-        ambiguous_lowercase: &[],
+        title_abbreviations: &["sig", "dott", "prof", "dr", "st"],
+        trailing_abbreviations: &["ecc", "etc"],
+        elision_prefixes: &["l", "d", "un", "all", "dell", "nell", "sull", "sant"],
+        ..LanguageProfile::neutral()
     }
 }
