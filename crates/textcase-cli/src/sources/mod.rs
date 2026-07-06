@@ -536,6 +536,22 @@ pub fn fetch_guidance(source: SourceId) -> &'static str {
     }
 }
 
+/// Whether the fetched download must be normalized in memory (zip extraction,
+/// JSON merge, or multi-file concatenation) before it can be written, versus a
+/// single payload that is streamed straight to disk. Mirrors the non-default
+/// arms of [`normalize_download`].
+pub fn requires_normalization(source: SourceId) -> bool {
+    matches!(
+        source,
+        SourceId::Geonames
+            | SourceId::Cldr
+            | SourceId::NaturalEarth
+            | SourceId::Ror
+            | SourceId::Gleif
+            | SourceId::UdGermanGsd
+    )
+}
+
 pub fn normalize_download(
     source: SourceId,
     downloads: Vec<Vec<u8>>,

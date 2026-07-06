@@ -28,6 +28,7 @@ pkg-fmt = "zip"
 clap.workspace = true
 flate2.workspace = true
 fst.workspace = true
+memmap2.workspace = true
 quick-xml.workspace = true
 reqwest.workspace = true
 serde.workspace = true
