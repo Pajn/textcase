@@ -1,10 +1,15 @@
+mod cldr;
 mod dbpedia;
+mod discogs;
 mod geonames;
 mod getty;
+mod gleif;
 mod gnd;
 mod musicbrainz;
+mod natural_earth;
 mod openstreetmap;
 mod orcid;
+mod ror;
 mod ud_german_gsd;
 mod wikidata;
 mod wiktionary;
@@ -26,6 +31,11 @@ use crate::{
 pub enum SourceId {
     Wikidata,
     Geonames,
+    Discogs,
+    Gleif,
+    Ror,
+    Cldr,
+    NaturalEarth,
     UdGermanGsd,
     Gnd,
     Orcid,
@@ -41,6 +51,11 @@ impl fmt::Display for SourceId {
         let value = match self {
             SourceId::Wikidata => "wikidata",
             SourceId::Geonames => "geonames",
+            SourceId::Discogs => "discogs",
+            SourceId::Gleif => "gleif",
+            SourceId::Ror => "ror",
+            SourceId::Cldr => "cldr",
+            SourceId::NaturalEarth => "natural-earth",
             SourceId::UdGermanGsd => "ud-german-gsd",
             SourceId::Gnd => "gnd",
             SourceId::Orcid => "orcid",
@@ -95,6 +110,12 @@ pub struct SourceRecord {
     pub score: f32,
 }
 
+/// Whether `value` mixes letter cases (`iPhone`, `LaTeX`), a signal that a
+/// name carries intentional brand casing worth scoring above plain words.
+pub(super) fn is_mixed_case(value: &str) -> bool {
+    value.chars().any(char::is_lowercase) && value.chars().any(char::is_uppercase)
+}
+
 pub struct FetchPlan {
     pub urls: Vec<String>,
     pub source_url: String,
@@ -116,6 +137,20 @@ const MUSICBRAINZ_KINDS: &[PreparedKind] = &[
     PreparedKind::MultiwordMap,
     PreparedKind::ProtectedForms,
 ];
+const DISCOGS_KINDS: &[PreparedKind] = &[
+    PreparedKind::CanonicalMap,
+    PreparedKind::MultiwordMap,
+    PreparedKind::ProtectedForms,
+];
+const GLEIF_KINDS: &[PreparedKind] = &[
+    PreparedKind::CanonicalMap,
+    PreparedKind::MultiwordMap,
+    PreparedKind::ProtectedForms,
+];
+const NATURAL_EARTH_KINDS: &[PreparedKind] =
+    &[PreparedKind::CanonicalMap, PreparedKind::MultiwordMap];
+const CLDR_KINDS: &[PreparedKind] = &[PreparedKind::CanonicalMap, PreparedKind::MultiwordMap];
+const ROR_KINDS: &[PreparedKind] = &[PreparedKind::CanonicalMap, PreparedKind::MultiwordMap];
 const GETTY_KINDS: &[PreparedKind] = &[PreparedKind::CanonicalMap, PreparedKind::MultiwordMap];
 const WIKTIONARY_KINDS: &[PreparedKind] = &[PreparedKind::WordSet, PreparedKind::RankedCandidates];
 const DBPEDIA_KINDS: &[PreparedKind] = &[PreparedKind::CanonicalMap, PreparedKind::MultiwordMap];
@@ -150,6 +185,76 @@ const DESCRIPTORS: &[SourceDescriptor] = &[
         docs_anchor: "#geonames",
         purpose: "geographical names and alternates",
         bundling_policy: "external plugin only with attribution guidance",
+    },
+    SourceDescriptor {
+        id: SourceId::Discogs,
+        display_name: "Discogs",
+        class: SourceClass::Green,
+        license_name: "CC0",
+        license_summary: "CC0 monthly dumps of artists, labels, and releases",
+        acknowledgement_flag: None,
+        recommended: true,
+        plugin_kinds: DISCOGS_KINDS,
+        domain_tags: &["music", "media"],
+        docs_anchor: "#discogs",
+        purpose: "music artist, label, and release names",
+        bundling_policy: "external plugin only",
+    },
+    SourceDescriptor {
+        id: SourceId::Gleif,
+        display_name: "GLEIF",
+        class: SourceClass::Green,
+        license_name: "CC0",
+        license_summary: "global legal entity names from the LEI system",
+        acknowledgement_flag: None,
+        recommended: true,
+        plugin_kinds: GLEIF_KINDS,
+        domain_tags: &["organizations", "companies"],
+        docs_anchor: "#gleif",
+        purpose: "company and organization legal names",
+        bundling_policy: "external plugin only",
+    },
+    SourceDescriptor {
+        id: SourceId::Ror,
+        display_name: "ROR",
+        class: SourceClass::Green,
+        license_name: "CC0",
+        license_summary: "research organization names from the ROR registry",
+        acknowledgement_flag: None,
+        recommended: true,
+        plugin_kinds: ROR_KINDS,
+        domain_tags: &["organizations", "research"],
+        docs_anchor: "#ror",
+        purpose: "research organization and institution names",
+        bundling_policy: "external plugin only",
+    },
+    SourceDescriptor {
+        id: SourceId::Cldr,
+        display_name: "Unicode CLDR",
+        class: SourceClass::Green,
+        license_name: "Unicode License v3",
+        license_summary: "language and territory display names per locale",
+        acknowledgement_flag: None,
+        recommended: true,
+        plugin_kinds: CLDR_KINDS,
+        domain_tags: &["locale", "names", "multilingual"],
+        docs_anchor: "#cldr",
+        purpose: "language, country, and region display names",
+        bundling_policy: "external plugin only",
+    },
+    SourceDescriptor {
+        id: SourceId::NaturalEarth,
+        display_name: "Natural Earth",
+        class: SourceClass::Green,
+        license_name: "public domain",
+        license_summary: "world-scale country and city names, no attribution required",
+        acknowledgement_flag: None,
+        recommended: false,
+        plugin_kinds: NATURAL_EARTH_KINDS,
+        domain_tags: &["geography", "places"],
+        docs_anchor: "#natural-earth",
+        purpose: "coarse geographic names without attribution obligations",
+        bundling_policy: "external plugin only",
     },
     SourceDescriptor {
         id: SourceId::UdGermanGsd,
@@ -302,6 +407,9 @@ pub fn suggested_output_name(source: SourceId, suffix: &str) -> String {
         SourceId::Geonames => "tsv",
         SourceId::UdGermanGsd => "conllu",
         SourceId::Wiktionary => "jsonl.gz",
+        SourceId::Discogs => "xml.gz",
+        SourceId::NaturalEarth => "geojson",
+        SourceId::Gleif => "xml",
         _ => "json",
     };
     format!("{}-{}.{}", source, suffix.to_lowercase(), extension)
@@ -342,6 +450,25 @@ pub fn built_in_fetch_plan(
             version: "r2.13".to_string(),
             output_suffix: "r2.13".to_string(),
         }),
+        SourceId::NaturalEarth => {
+            let (source_url, urls) = natural_earth::built_in_download();
+            Ok(FetchPlan {
+                source_url,
+                urls,
+                version: natural_earth::NATURAL_EARTH_VERSION.to_string(),
+                output_suffix: "world".to_string(),
+            })
+        }
+        SourceId::Cldr => {
+            let lang = lang.ok_or("cldr built-in fetch requires --lang")?;
+            let (source_url, urls) = cldr::built_in_download(lang);
+            Ok(FetchPlan {
+                source_url,
+                urls,
+                version: cldr::CLDR_JSON_VERSION.to_string(),
+                output_suffix: lang.to_ascii_lowercase(),
+            })
+        }
         SourceId::Wiktionary => {
             let lang = lang.ok_or("wiktionary built-in fetch requires --lang")?;
             let (url, version) = wiktionary::built_in_download(lang)?;
@@ -391,7 +518,38 @@ pub fn fetch_guidance(source: SourceId) -> &'static str {
         SourceId::Openstreetmap => {
             "URL-driven; point --url at a Nominatim JSON search scoped to the locality set you need, and acknowledge ODbL"
         }
+        SourceId::Gleif => {
+            "URL-driven; point --url at a GLEIF golden copy or concatenated LEI file (zip, gz, or xml) from gleif.org/en/lei-data"
+        }
+        SourceId::NaturalEarth => {
+            "built-in download; fetches world countries and populated places GeoJSON from a pinned Natural Earth release"
+        }
+        SourceId::Cldr => {
+            "built-in download; requires --lang and fetches that locale's territory and language display names from cldr-json (pinned release)"
+        }
+        SourceId::Ror => {
+            "URL-driven; point --url at the latest ROR data dump zip from Zenodo (https://doi.org/10.5281/zenodo.6347574)"
+        }
+        SourceId::Discogs => {
+            "URL-driven; point --url at a monthly dump from data.discogs.com, e.g. https://discogs-data-dumps.s3.us-west-2.amazonaws.com/data/2025/discogs_20250601_artists.xml.gz (the URL carries the dump date)"
+        }
     }
+}
+
+/// Whether the fetched download must be normalized in memory (zip extraction,
+/// JSON merge, or multi-file concatenation) before it can be written, versus a
+/// single payload that is streamed straight to disk. Mirrors the non-default
+/// arms of [`normalize_download`].
+pub fn requires_normalization(source: SourceId) -> bool {
+    matches!(
+        source,
+        SourceId::Geonames
+            | SourceId::Cldr
+            | SourceId::NaturalEarth
+            | SourceId::Ror
+            | SourceId::Gleif
+            | SourceId::UdGermanGsd
+    )
 }
 
 pub fn normalize_download(
@@ -405,6 +563,22 @@ pub fn normalize_download(
                 .next()
                 .ok_or("GeoNames fetch returned no payload")?;
             geonames::extract_zip(&archive)
+        }
+        SourceId::Cldr => cldr::merge(downloads),
+        SourceId::NaturalEarth => natural_earth::merge(downloads),
+        SourceId::Ror => {
+            let payload = downloads
+                .into_iter()
+                .next()
+                .ok_or("ROR fetch returned no payload")?;
+            ror::extract_payload(&payload)
+        }
+        SourceId::Gleif => {
+            let payload = downloads
+                .into_iter()
+                .next()
+                .ok_or("GLEIF fetch returned no payload")?;
+            gleif::extract_payload(&payload)
         }
         SourceId::UdGermanGsd => {
             Ok(downloads
@@ -434,6 +608,11 @@ pub fn validate_source_bytes(
 ) -> Result<(), Box<dyn std::error::Error>> {
     match source {
         SourceId::Geonames => geonames::validate(bytes),
+        SourceId::Discogs => discogs::validate(bytes),
+        SourceId::Gleif => gleif::validate(bytes),
+        SourceId::Ror => ror::validate(bytes),
+        SourceId::Cldr => cldr::validate(bytes),
+        SourceId::NaturalEarth => natural_earth::validate(bytes),
         SourceId::UdGermanGsd => ud_german_gsd::validate(bytes),
         SourceId::Wikidata => {
             wikidata::parse(bytes, None)?;
@@ -476,6 +655,11 @@ pub fn sample_payload(
     match source {
         SourceId::Wikidata => wikidata::sample(lang),
         SourceId::Geonames => geonames::sample(country),
+        SourceId::Discogs => discogs::sample(lang),
+        SourceId::Gleif => gleif::sample(lang),
+        SourceId::Ror => ror::sample(lang),
+        SourceId::Cldr => cldr::sample(lang),
+        SourceId::NaturalEarth => natural_earth::sample(lang),
         SourceId::UdGermanGsd => ud_german_gsd::sample(),
         SourceId::Gnd => gnd::sample(lang),
         SourceId::Orcid => orcid::sample(lang),
@@ -502,6 +686,16 @@ pub fn prepare_source(
     let records = match source {
         SourceId::Wikidata => wikidata::parse(bytes, lang)?,
         SourceId::Geonames => geonames::parse(bytes)?,
+        SourceId::Discogs => discogs::parse(bytes)?,
+        SourceId::Gleif => gleif::parse(bytes)?,
+        SourceId::Ror => ror::parse(bytes)?,
+        SourceId::Cldr => {
+            // CLDR display names are locale-scoped, so the prepared plugin must
+            // be tagged with a real locale rather than the "und" fallback.
+            lang.ok_or("cldr prepare requires --lang")?;
+            cldr::parse(bytes)?
+        }
+        SourceId::NaturalEarth => natural_earth::parse(bytes)?,
         SourceId::UdGermanGsd => ud_german_gsd::parse(bytes)?,
         SourceId::Gnd => gnd::parse(bytes)?,
         SourceId::Orcid => orcid::parse(bytes)?,

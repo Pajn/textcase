@@ -91,16 +91,12 @@ fn parse_record(value: &Value) -> Option<SourceRecord> {
     Some(SourceRecord {
         canonical: canonical.clone(),
         aliases: aliases.into_iter().collect(),
-        score: if is_mixed_case_brand(&canonical) {
+        score: if super::is_mixed_case(&canonical) {
             2.0
         } else {
             1.2
         },
     })
-}
-
-fn is_mixed_case_brand(value: &str) -> bool {
-    value.chars().any(|char| char.is_lowercase()) && value.chars().any(|char| char.is_uppercase())
 }
 
 #[cfg(test)]

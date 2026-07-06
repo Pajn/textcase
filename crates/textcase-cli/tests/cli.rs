@@ -15,6 +15,9 @@ fn list_sources_includes_classes() {
     assert!(stdout.contains("wikidata"));
     assert!(stdout.contains("green"));
     assert!(stdout.contains("ud-german-gsd"));
+    for source in ["discogs", "gleif", "ror", "cldr", "natural-earth"] {
+        assert!(stdout.contains(source), "missing source: {source}");
+    }
     assert!(!stdout.contains("omw"));
 }
 
