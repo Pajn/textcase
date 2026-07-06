@@ -2,14 +2,17 @@ use std::collections::BTreeMap;
 
 use textcase::lexicon::Candidate;
 
-use crate::{prepare::normalize::normalized_aliases, sources::SourceRecord};
+use crate::{prepare::normalize::lookup_entries, sources::SourceRecord};
 
 pub fn build(records: &[SourceRecord]) -> BTreeMap<String, Vec<Candidate>> {
     let mut out: BTreeMap<String, Vec<Candidate>> = BTreeMap::new();
     for record in records {
-        for alias in normalized_aliases(record) {
-            out.entry(alias).or_default().push(Candidate {
-                value: record.canonical.clone(),
+        // An inflected form keeps its own casing as the candidate value
+        // ("probleme" recases to "Probleme"), rather than being replaced by
+        // the lemma ("Problem"), via the lookup-entry rewrite guard.
+        for (key, value) in lookup_entries(record) {
+            out.entry(key).or_default().push(Candidate {
+                value,
                 score: record.score,
             });
         }
