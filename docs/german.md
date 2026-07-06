@@ -25,3 +25,5 @@ Balanced mode adds hand-authored heuristics:
 Aggressive mode keeps balanced heuristics and additionally uses ranked-candidate plugin data when available.
 
 This improves recall when a prepared `ranked-candidates` plugin exists, especially for optional workflows such as `ud-german-gsd`.
+
+Candidates scoring below `1.0` are ignored as noise and the balanced heuristics decide instead: the `ud-german-gsd` scoring assigns nouns `2.0+` and proper nouns `3.0+`, so sub-`1.0` scores only arise from feature bonuses on non-noun readings.

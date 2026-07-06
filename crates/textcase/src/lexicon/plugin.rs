@@ -7,7 +7,7 @@ use fst::Streamer;
 
 use crate::{
     Result,
-    lexicon::{builtin_canonical_form, builtin_canonical_phrase, json::load_json_plugin},
+    lexicon::json::load_json_plugin,
     plugin::{PluginKind, PluginPayload},
 };
 
@@ -147,9 +147,6 @@ impl PluginSet {
 impl LexiconProvider for PluginSet {
     fn canonical_form(&self, locale: &str, token: &str) -> Option<String> {
         let key = token.trim();
-        if let Some(builtin) = builtin_canonical_form(key) {
-            return Some(builtin.to_string());
-        }
         self.protected_forms
             .get(locale)
             .and_then(|map| map.get(key).cloned())
@@ -175,9 +172,6 @@ impl LexiconProvider for PluginSet {
     }
 
     fn canonical_phrase(&self, locale: &str, phrase: &str) -> Option<String> {
-        if let Some(builtin) = builtin_canonical_phrase(phrase.trim()) {
-            return Some(builtin.to_string());
-        }
         self.phrase_maps
             .get(locale)
             .and_then(|map| map.get(phrase.trim()).cloned())

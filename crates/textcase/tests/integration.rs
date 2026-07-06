@@ -61,6 +61,23 @@ fn greek_lowercases_to_final_sigma() {
 }
 
 #[test]
+fn unknown_locale_gets_neutral_profile_not_english() {
+    // English stop words must not leak into languages without a profile.
+    let polish = CaseOptions {
+        locale: "pl",
+        mode: CaseMode::Title,
+        ..CaseOptions::default()
+    };
+    assert_eq!(convert("all of the things", &polish), "All Of The Things");
+    let english = CaseOptions {
+        locale: "en",
+        mode: CaseMode::Title,
+        ..CaseOptions::default()
+    };
+    assert_eq!(convert("all of the things", &english), "All of the Things");
+}
+
+#[test]
 fn sentence_case_normalizes_basic_english() {
     assert_eq!(
         sentence_case("the rise of github in berlin", "en"),
@@ -76,6 +93,44 @@ fn sentence_case_downcases_title_cased_input() {
         sentence_case("The Quick Brown Fox Jumps", "en"),
         "The quick brown fox jumps"
     );
+}
+
+#[test]
+fn sentence_case_preserves_mid_sentence_proper_nouns() {
+    // A lone capital in an otherwise lowercase sentence is a proper-noun
+    // signal that no lexicon can restore once lost.
+    assert_eq!(
+        sentence_case("yesterday Alice met Bob in Paris", "en"),
+        "Yesterday Alice met Bob in Paris"
+    );
+    // German prose keeps its capitalized nouns even in conservative mode.
+    assert_eq!(
+        sentence_case("wir besuchen die Alte Oper heute", "de"),
+        "Wir besuchen die Alte Oper heute"
+    );
+}
+
+#[test]
+fn sentence_case_can_disable_existing_capital_preservation() {
+    let options = CaseOptions {
+        locale: "en",
+        preserve_existing_capitals: false,
+        ..CaseOptions::default()
+    };
+    assert_eq!(
+        convert("yesterday Alice met Bob", &options),
+        "Yesterday alice met bob"
+    );
+}
+
+#[test]
+fn sentence_case_capitalizes_english_pronoun_i() {
+    assert_eq!(sentence_case("i think i can", "en"), "I think I can");
+    assert_eq!(
+        sentence_case("he said i'm ready", "en"),
+        "He said I'm ready"
+    );
+    assert_eq!(sentence_case("I THINK I CAN", "en"), "I think I can");
 }
 
 #[test]
@@ -112,6 +167,27 @@ fn title_case_capitalizes_single_letter_apostrophe_prefix() {
         ..CaseOptions::default()
     };
     assert_eq!(convert("the o'brien files", &options), "The O'Brien Files");
+}
+
+#[test]
+fn french_title_keeps_elided_particles_lowercase() {
+    let options = CaseOptions {
+        locale: "fr",
+        mode: CaseMode::Title,
+        ..CaseOptions::default()
+    };
+    // Mid-title the elided particle stays lowercase; the title-opening word
+    // still starts with a capital.
+    assert_eq!(
+        convert("l'homme d'affaires et la vie", &options),
+        "L'Homme d'Affaires et la Vie"
+    );
+    // French sentence case is unaffected: ICU capitalizes the whole first
+    // word segment.
+    assert_eq!(
+        sentence_case("l'homme est arrivé", "fr"),
+        "L'homme est arrivé"
+    );
 }
 
 #[test]
@@ -166,10 +242,90 @@ fn sentence_case_does_not_split_on_abbreviations() {
 }
 
 #[test]
+fn sentence_case_numeric_abbreviations_require_a_number() {
+    // "no." is an abbreviation only directly before a number...
+    assert_eq!(
+        sentence_case("she wrote no. 5 on the door", "en"),
+        "She wrote no. 5 on the door"
+    );
+    // ...elsewhere it is ordinary prose and its period ends the sentence.
+    assert_eq!(
+        sentence_case("the answer is no. it was clear", "en"),
+        "The answer is no. It was clear"
+    );
+}
+
+#[test]
+fn sentence_case_trailing_abbreviations_follow_next_word_casing() {
+    // Mid-phrase, "inc." continues the sentence...
+    assert_eq!(
+        sentence_case("we sued acme inc. yesterday it settled", "en"),
+        "We sued acme inc. yesterday it settled"
+    );
+    // ...but a capitalized next word marks a real sentence end after "etc.".
+    assert_eq!(
+        sentence_case("apples, pears, etc. Then we left", "en"),
+        "Apples, pears, etc. Then we left"
+    );
+}
+
+#[test]
+fn abbreviations_are_locale_specific() {
+    // German "Nr." abbreviates before a number...
+    assert_eq!(
+        sentence_case("siehe nr. 5 bitte", "de"),
+        "Siehe nr. 5 bitte"
+    );
+    // ...and "usw." continues the phrase before a lowercase word.
+    assert_eq!(
+        sentence_case("äpfel, birnen usw. dann gingen wir", "de"),
+        "Äpfel, birnen usw. dann gingen wir"
+    );
+    // English has no "usw."; the period is a real terminal there.
+    assert_eq!(
+        sentence_case("äpfel, birnen usw. dann gingen wir", "en"),
+        "Äpfel, birnen usw. Dann gingen wir"
+    );
+}
+
+#[test]
 fn sentence_case_splits_on_real_terminals() {
     assert_eq!(
         sentence_case("the show ended. everyone left", "en"),
         "The show ended. Everyone left"
+    );
+}
+
+#[test]
+fn sentence_case_splits_on_unspaced_exclamation_and_question() {
+    // Unlike the period, "!" and "?" are never decimal points or abbreviation
+    // dots, so they end the sentence even without a following space.
+    assert_eq!(
+        sentence_case("wait!something happened", "en"),
+        "Wait!Something happened"
+    );
+    assert_eq!(sentence_case("really?yes it is", "en"), "Really?Yes it is");
+}
+
+#[test]
+fn sentence_case_ellipsis_follows_input_casing() {
+    // A trailing-off ellipsis continues the sentence...
+    assert_eq!(
+        sentence_case("wait… there is more", "en"),
+        "Wait… there is more"
+    );
+    assert_eq!(
+        sentence_case("hold on... something is coming", "en"),
+        "Hold on... something is coming"
+    );
+    // ...but a capitalized next word marks a genuine new sentence.
+    assert_eq!(
+        sentence_case("wait… Then it began", "en"),
+        "Wait… Then it began"
+    );
+    assert_eq!(
+        sentence_case("hold on... Something is coming", "en"),
+        "Hold on... Something is coming"
     );
 }
 
@@ -187,6 +343,27 @@ fn sentence_case_converts_shouting_titles() {
 }
 
 #[test]
+fn sentence_case_shouting_tolerates_lowercase_stop_words() {
+    // A lowercase connective does not turn a shouted title into acronyms.
+    assert_eq!(
+        sentence_case("NEW YORK vs THE WORLD", "en"),
+        "New York vs the world"
+    );
+    // Short all-caps words without a long shouted word stay acronyms.
+    assert_eq!(sentence_case("USA vs USSR", "en"), "USA vs USSR");
+}
+
+#[test]
+fn sentence_case_shouting_is_scoped_per_sentence() {
+    // The first sentence is shouted and converts; the second keeps its
+    // genuine acronym.
+    assert_eq!(
+        sentence_case("BREAKING NEWS TODAY. the NASA probe landed", "en"),
+        "Breaking news today. The NASA probe landed"
+    );
+}
+
+#[test]
 fn sentence_case_preserves_acronyms_in_mixed_text() {
     assert_eq!(
         sentence_case("NASA launched the probe", "en"),
@@ -200,6 +377,66 @@ fn sentence_case_lexicon_overrides_all_caps() {
     assert_eq!(sentence_case("the GITHUB repo", "en"), "The GitHub repo");
     // ...while an all-caps word absent from the lexicon stays preserved.
     assert_eq!(sentence_case("the NASA probe", "en"), "The NASA probe");
+}
+
+#[test]
+fn sentence_case_gates_ambiguous_builtin_forms_on_casing() {
+    // "rust" is also an ordinary word; without a casing signal in the input
+    // the builtin canonical form must not fire.
+    assert_eq!(
+        sentence_case("the rust on the old pipe", "en"),
+        "The rust on the old pipe"
+    );
+    // A cased occurrence restores the canonical form.
+    assert_eq!(
+        sentence_case("we love Rust dearly", "en"),
+        "We love Rust dearly"
+    );
+    // A title always carries the signal.
+    let title = CaseOptions {
+        locale: "en",
+        mode: CaseMode::Title,
+        ..CaseOptions::default()
+    };
+    assert_eq!(
+        convert("programming in rust", &title),
+        "Programming in Rust"
+    );
+
+    // "latex" is likewise an ordinary word (the material); it stays lowercase in
+    // plain prose but restores under a casing signal.
+    assert_eq!(
+        sentence_case("the latex gloves tore", "en"),
+        "The latex gloves tore"
+    );
+    assert_eq!(
+        convert("typesetting in latex", &title),
+        "Typesetting in LaTeX"
+    );
+}
+
+#[test]
+fn user_lexicon_overrides_builtin_forms() {
+    let prepared = demo_prepared_lexicon(
+        "en-override",
+        PreparedKind::CanonicalMap,
+        "en",
+        PreparedPayload::CanonicalMap(BTreeMap::from([(
+            "github".to_string(),
+            "GITHUB".to_string(),
+        )])),
+    );
+    let bytes = serde_json::to_vec(&prepared.to_plugin_schema()).unwrap();
+    let lexicons = PluginSet::from_json_bytes(&bytes).unwrap();
+    let options = CaseOptions {
+        locale: "en",
+        lexicons: Some(&lexicons),
+        ..CaseOptions::default()
+    };
+    assert_eq!(
+        convert("using github daily", &options),
+        "Using GITHUB daily"
+    );
 }
 
 #[test]
@@ -309,6 +546,41 @@ fn subtitle_normalization_converts_flanked_dash() {
 }
 
 #[test]
+fn sentence_title_ignores_ranges_and_attached_colons() {
+    // "a - f" is a range, not a subtitle break.
+    assert_eq!(
+        sentence_case_title("grades a - f explained", "en"),
+        "Grades a - f explained"
+    );
+    // An unspaced colon is a time, ratio, or brand, not a subtitle separator.
+    assert_eq!(
+        sentence_case_title("re:invent recap", "en"),
+        "Re:invent recap"
+    );
+}
+
+#[test]
+fn sentence_title_capitalizes_after_attached_em_dash() {
+    assert_eq!(
+        sentence_case_title("the album—deluxe edition", "en"),
+        "The album—Deluxe edition"
+    );
+}
+
+#[test]
+fn subtitle_normalization_ignores_letter_ranges() {
+    let options = CaseOptions {
+        locale: "en",
+        subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
+        ..CaseOptions::default()
+    };
+    assert_eq!(
+        convert("grades a - f explained", &options),
+        "Grades a - f explained"
+    );
+}
+
+#[test]
 fn sentence_title_capitalizes_after_subtitle_separator() {
     let options = CaseOptions {
         locale: "en",
@@ -316,9 +588,11 @@ fn sentence_title_capitalizes_after_subtitle_separator() {
         subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
         ..CaseOptions::default()
     };
+    // Lowercase "rust" carries no casing signal in a sentence-like mode, so
+    // the ambiguous builtin form is not restored.
     assert_eq!(
         convert("the rise of github - inside rust tooling", &options),
-        "The rise of GitHub: Inside Rust tooling"
+        "The rise of GitHub: Inside rust tooling"
     );
 }
 
@@ -472,6 +746,36 @@ fn fst_plugin_round_trip_restores_forms() {
         path.file_name().unwrap().to_string_lossy()
     )))
     .unwrap();
+}
+
+#[test]
+fn german_aggressive_mode_ignores_noise_candidates() {
+    let prepared = demo_prepared_lexicon(
+        "de-ranked",
+        PreparedKind::RankedCandidates,
+        "de",
+        PreparedPayload::RankedCandidates(BTreeMap::from([(
+            "haus".to_string(),
+            vec![textcase::Candidate {
+                value: "HAUS".to_string(),
+                score: 0.3,
+            }],
+        )])),
+    );
+    let bytes = serde_json::to_vec(&prepared.to_plugin_schema()).unwrap();
+    let lexicons = PluginSet::from_json_bytes(&bytes).unwrap();
+    let options = CaseOptions {
+        locale: "de",
+        german_mode: GermanMode::Aggressive,
+        lexicons: Some(&lexicons),
+        ..CaseOptions::default()
+    };
+    // The below-threshold candidate is ignored, and the balanced article
+    // heuristic still capitalizes the noun.
+    assert_eq!(
+        convert("wir sehen das haus", &options),
+        "Wir sehen das Haus"
+    );
 }
 
 #[test]
