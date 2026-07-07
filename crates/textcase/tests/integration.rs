@@ -9,8 +9,8 @@ use textcase::plugin::{
     LicenseMetadata, PluginKind, PluginMetadata, SchemaVersion, SourceMetadata,
 };
 use textcase::{
-    CaseMode, CaseOptions, GermanMode, PluginSet, SubtitleSeparatorStyle, convert, sentence_case,
-    sentence_case_title,
+    CaseMode, CaseOptions, CasingRule, Confidence, GermanMode, PluginSet, SubtitleSeparatorStyle,
+    convert, convert_analyze, sentence_case, sentence_case_analyze, sentence_case_title,
 };
 
 #[test]
@@ -707,6 +707,275 @@ fn json_plugin_restores_known_forms() {
     assert_eq!(
         convert("berlin and new york", &options),
         "Berlin and New York"
+    );
+}
+
+/// A small lexicon with a single-word canonical form and a multiword phrase, for
+/// the analysis rule tests.
+fn analysis_lexicon() -> PluginSet {
+    let canonical = demo_prepared_lexicon(
+        "analysis-canonical",
+        PreparedKind::CanonicalMap,
+        "en",
+        PreparedPayload::CanonicalMap(BTreeMap::from([(
+            "github".to_string(),
+            "GitHub".to_string(),
+        )])),
+    );
+    // The multiword phrase must go through MultiwordMap: canonical_phrase() only
+    // consults phrase_maps, so a CanonicalMap entry would never exercise the
+    // user-provided multiword path (and would silently fall back to the builtin).
+    let multiword = demo_prepared_lexicon(
+        "analysis-multiword",
+        PreparedKind::MultiwordMap,
+        "en",
+        PreparedPayload::MultiwordMap(BTreeMap::from([(
+            "new york".to_string(),
+            "New York".to_string(),
+        )])),
+    );
+    let canonical_bytes = serde_json::to_vec(&canonical.to_plugin_schema()).unwrap();
+    let multiword_bytes = serde_json::to_vec(&multiword.to_plugin_schema()).unwrap();
+    PluginSet::from_json_bytes(&canonical_bytes)
+        .unwrap()
+        .merge(PluginSet::from_json_bytes(&multiword_bytes).unwrap())
+}
+
+/// Finds the span whose source text equals `word`, resolving its range against
+/// the raw `input`.
+fn span_for<'a>(
+    analysis: &'a textcase::CaseAnalysis,
+    input: &str,
+    word: &str,
+) -> &'a textcase::CasingSpan {
+    analysis
+        .spans
+        .iter()
+        .find(|span| &input[span.source.clone()] == word)
+        .unwrap_or_else(|| panic!("no span whose source is {word:?}"))
+}
+
+#[test]
+fn analysis_output_matches_plain_conversion() {
+    // The shared cascade must produce identical output on both paths, across
+    // modes, locales, and lexicon settings.
+    const CORPUS: &[&str] = &[
+        "the rise of github - inside rust tooling",
+        "BREAKING NEWS. the NASA probe landed",
+        "alice met bob in new york",
+        "the wind in the willows",
+        "iPhone versus the world",
+        "das boot und der sturm",
+        "istanbul in winter",
+        "note: this is fine",
+        "",
+        "   ",
+    ];
+    let lexicons = analysis_lexicon();
+    let option_sets = [
+        CaseOptions::for_locale("en"),
+        CaseOptions {
+            mode: CaseMode::Title,
+            ..CaseOptions::for_locale("en")
+        },
+        CaseOptions {
+            mode: CaseMode::SentenceTitle,
+            subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
+            ..CaseOptions::for_locale("en")
+        },
+        CaseOptions {
+            german_mode: GermanMode::Balanced,
+            ..CaseOptions::for_locale("de")
+        },
+        CaseOptions {
+            lexicons: Some(&lexicons),
+            ..CaseOptions::for_locale("en")
+        },
+    ];
+    for options in &option_sets {
+        for input in CORPUS {
+            assert_eq!(
+                convert_analyze(input, options).output,
+                convert(input, options),
+                "mismatch for {input:?} with mode {:?}",
+                options.mode
+            );
+        }
+    }
+}
+
+#[test]
+fn analysis_reports_solid_lexicon_and_sentence_start() {
+    let analysis = sentence_case_analyze("the rise of github", "en");
+    assert_eq!(analysis.output, "The rise of GitHub");
+    assert_eq!(analysis.confidence, Confidence::Solid);
+
+    let the = span_for(&analysis, "the rise of github", "the");
+    assert_eq!(the.rule, CasingRule::SentenceStart);
+    assert!(the.changed);
+
+    let github = span_for(&analysis, "the rise of github", "github");
+    assert_eq!(github.rule, CasingRule::CanonicalLexicon);
+    assert_eq!(github.confidence, Confidence::Solid);
+    // Byte ranges map into the produced output.
+    assert_eq!(&analysis.output[github.output.clone()], "GitHub");
+
+    // A word left lowercase in the sentence body is a solid, unchanged decision.
+    let of = span_for(&analysis, "the rise of github", "of");
+    assert_eq!(of.rule, CasingRule::Lowercased);
+    assert!(!of.changed);
+}
+
+#[test]
+fn analysis_flags_acronym_preservation_as_heuristic() {
+    // Preserving "NASA" as an acronym rather than recasing it is a heuristic, so
+    // it drives the whole-title confidence.
+    let analysis = sentence_case_analyze("the NASA probe landed", "en");
+    assert_eq!(analysis.output, "The NASA probe landed");
+    assert_eq!(analysis.confidence, Confidence::Heuristic);
+    let nasa = span_for(&analysis, "the NASA probe landed", "NASA");
+    assert_eq!(nasa.rule, CasingRule::AcronymPreserved);
+    assert_eq!(nasa.confidence, Confidence::Heuristic);
+    assert!(!nasa.changed);
+}
+
+#[test]
+fn analysis_flags_preserved_lone_capital_as_heuristic() {
+    // "Alice" is a lone capital mid-sentence: kept as a likely proper noun that
+    // no lexicon can restore (heuristic), which drives the overall confidence.
+    let input = "the Alice protocol shipped";
+    let analysis = sentence_case_analyze(input, "en");
+    assert_eq!(analysis.output, "The Alice protocol shipped");
+
+    let alice = span_for(&analysis, input, "Alice");
+    assert_eq!(alice.rule, CasingRule::ProperNounPreserved);
+    assert_eq!(alice.confidence, Confidence::Heuristic);
+    assert!(!alice.changed);
+    assert_eq!(analysis.confidence, Confidence::Heuristic);
+}
+
+#[test]
+fn analysis_reports_title_small_words_and_edges() {
+    let options = CaseOptions {
+        mode: CaseMode::Title,
+        ..CaseOptions::for_locale("en")
+    };
+    let analysis = convert_analyze("the wind in the willows", &options);
+    assert_eq!(analysis.output, "The Wind in the Willows");
+
+    let rules: Vec<_> = analysis.spans.iter().map(|span| span.rule).collect();
+    assert_eq!(
+        rules,
+        vec![
+            CasingRule::SentenceStart, // "the" opens the title (a subtitle start)
+            CasingRule::Capitalized,   // "wind": ordinary title word, unverified
+            CasingRule::SmallWord,     // "in": lowercased stop word
+            CasingRule::SmallWord,     // "the"
+            CasingRule::TitleEdge,     // "willows" closes the title
+        ]
+    );
+    // An ordinary capitalized title word with no lexicon backing is unverified.
+    assert_eq!(analysis.confidence, Confidence::Unverified);
+    let wind = span_for(&analysis, "the wind in the willows", "wind");
+    assert_eq!(wind.confidence, Confidence::Unverified);
+}
+
+#[test]
+fn analysis_merges_multiword_lexicon_into_one_span() {
+    let lexicons = analysis_lexicon();
+    let options = CaseOptions {
+        lexicons: Some(&lexicons),
+        ..CaseOptions::for_locale("en")
+    };
+    let analysis = convert_analyze("alice met bob in new york", &options);
+    assert_eq!(analysis.output, "Alice met bob in New York");
+
+    // "new york" collapses to a single MultiwordLexicon span covering both words.
+    let input = "alice met bob in new york";
+    let phrase = span_for(&analysis, input, "new york");
+    assert_eq!(phrase.rule, CasingRule::MultiwordLexicon);
+    assert_eq!(phrase.confidence, Confidence::Solid);
+    assert_eq!(&analysis.output[phrase.output.clone()], "New York");
+    assert!(phrase.changed);
+    // The second word is absorbed, not reported separately.
+    assert!(
+        analysis
+            .spans
+            .iter()
+            .all(|span| &input[span.source.clone()] != "york")
+    );
+}
+
+#[test]
+fn analysis_source_ranges_index_the_raw_input() {
+    // Span ranges index the raw input directly, even when whitespace
+    // normalization collapsed the run in the output.
+    let raw = "alice   met";
+    let analysis = sentence_case_analyze(raw, "en");
+    assert_eq!(analysis.output, "Alice met");
+    // "met" starts after "alice" (5 bytes) and the three-space run.
+    let met = span_for(&analysis, raw, "met");
+    assert_eq!(met.source, 8..11);
+    assert_eq!(&raw[met.source.clone()], "met");
+    assert!(!met.changed);
+}
+
+#[test]
+fn analysis_reports_whitespace_collapse_transform() {
+    // The collapsed run surfaces as a WhitespaceCollapsed span mapping the raw
+    // three spaces to the single output space.
+    let raw = "alice   met";
+    let analysis = sentence_case_analyze(raw, "en");
+    let ws = analysis
+        .spans
+        .iter()
+        .find(|span| span.rule == CasingRule::WhitespaceCollapsed)
+        .expect("a whitespace-collapse span");
+    assert_eq!(&raw[ws.source.clone()], "   ");
+    assert_eq!(&analysis.output[ws.output.clone()], " ");
+    assert!(ws.changed);
+    // A single space that did not change produces no span.
+    let plain = sentence_case_analyze("alice met", "en");
+    assert!(
+        plain
+            .spans
+            .iter()
+            .all(|span| span.rule != CasingRule::WhitespaceCollapsed)
+    );
+}
+
+#[test]
+fn analysis_reports_separator_normalization_transform() {
+    // Rewriting " - " to ": " surfaces as one SeparatorNormalized span covering
+    // the raw separator, mapping it to the produced output.
+    let options = CaseOptions {
+        mode: CaseMode::SentenceTitle,
+        subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
+        ..CaseOptions::for_locale("en")
+    };
+    let raw = "the album - remastered";
+    let analysis = convert_analyze(raw, &options);
+    assert_eq!(analysis.output, "The album: Remastered");
+
+    let sep = analysis
+        .spans
+        .iter()
+        .find(|span| span.rule == CasingRule::SeparatorNormalized)
+        .expect("a separator span");
+    assert_eq!(&raw[sep.source.clone()], " - ");
+    assert_eq!(&analysis.output[sep.output.clone()], ": ");
+    assert!(sep.changed);
+
+    // A separator already in the requested style is not a transformation, so no
+    // SeparatorNormalized span is emitted (guards the skip in sentence.rs).
+    let already = "the album: remastered";
+    let analysis = convert_analyze(already, &options);
+    assert_eq!(analysis.output, "The album: Remastered");
+    assert!(
+        analysis
+            .spans
+            .iter()
+            .all(|span| span.rule != CasingRule::SeparatorNormalized)
     );
 }
 

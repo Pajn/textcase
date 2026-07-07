@@ -17,29 +17,6 @@ pub fn collapse_whitespace(input: &str) -> String {
     out.trim().to_string()
 }
 
-/// Collapses runs of whitespace like [`collapse_whitespace`] but keeps line
-/// breaks: a whitespace run containing a newline collapses to a single `\n`,
-/// any other run to a single space. Leading and trailing whitespace is trimmed.
-pub fn collapse_whitespace_preserving_newlines(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
-    let mut in_whitespace = false;
-    let mut run_has_newline = false;
-    for ch in input.chars() {
-        if ch.is_whitespace() {
-            in_whitespace = true;
-            run_has_newline |= ch == '\n';
-        } else {
-            if in_whitespace && !out.is_empty() {
-                out.push(if run_has_newline { '\n' } else { ' ' });
-            }
-            out.push(ch);
-            in_whitespace = false;
-            run_has_newline = false;
-        }
-    }
-    out.trim().to_string()
-}
-
 pub fn normalize_lookup_key(input: &str) -> String {
     collapse_whitespace(input).to_lowercase()
 }

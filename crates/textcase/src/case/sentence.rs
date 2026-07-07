@@ -1,9 +1,11 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
+    analysis::{CaseAnalysis, CasingRule, CasingSpan, Confidence},
     case::{
-        mode_capitalizes_after_subtitle, mode_is_sentence_like, mode_is_title, prepare_input,
-        should_keep_lowercase_in_title, subtitle_separator_flags,
+        mode_capitalizes_after_subtitle, mode_flattens_lines, mode_is_sentence_like, mode_is_title,
+        normalize_separator_tokens, normalize_whitespace_tokens, should_keep_lowercase_in_title,
+        subtitle_separator_flags,
     },
     config::{CaseMode, CaseOptions},
     icu::{
@@ -29,10 +31,56 @@ struct RecaseContext<'a> {
 
 /// Converts text according to the provided locale, case mode, and lexicon settings.
 pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
-    let prepared = prepare_input(input, options);
-    let mut tokens = tokenize(&prepared);
+    run::<false>(input, options).output
+}
+
+/// Converts `input` like [`convert`] and additionally returns a [`CaseAnalysis`]:
+/// the recased string, an overall [`Confidence`], and a [`CasingSpan`] per word
+/// recording the deciding [`CasingRule`], its confidence, and whether it changed.
+///
+/// The output is byte-identical to [`convert`] on the same input and options;
+/// both share one per-word cascade.
+///
+/// ```
+/// use textcase::{convert_analyze, CaseOptions, CasingRule, Confidence};
+///
+/// let analysis = convert_analyze("the rise of github", &CaseOptions::for_locale("en"));
+/// assert_eq!(analysis.output, "The rise of GitHub");
+/// // The canonical-form restore and sentence-start capital are both solid.
+/// assert_eq!(analysis.confidence, Confidence::Solid);
+/// assert!(analysis.spans.iter().any(|span| span.rule == CasingRule::CanonicalLexicon));
+/// ```
+#[must_use]
+pub fn convert_analyze(input: &str, options: &CaseOptions<'_>) -> CaseAnalysis {
+    run::<true>(input, options)
+}
+
+/// Converts `input` to sentence case for `locale` and returns a [`CaseAnalysis`].
+/// Sugar for [`convert_analyze`] with default options; see it for details.
+#[must_use]
+pub fn sentence_case_analyze(input: &str, locale: &str) -> CaseAnalysis {
+    convert_analyze(input, &CaseOptions::for_locale(locale))
+}
+
+/// The shared conversion core. `RECORD` is a compile-time flag: [`convert`]
+/// instantiates it `false`, so the span bookkeeping below is dead-code
+/// eliminated and the hot path is unchanged; [`convert_analyze`] instantiates it
+/// `true` to record per-word attribution.
+fn run<const RECORD: bool>(input: &str, options: &CaseOptions<'_>) -> CaseAnalysis {
+    // Tokenize the raw input directly and normalize at the token level, so every
+    // token keeps a `source` range back into `input` regardless of how its text
+    // is later rewritten.
+    let mut tokens = tokenize(input);
     if tokens.is_empty() {
-        return prepared;
+        return CaseAnalysis {
+            output: input.to_string(),
+            confidence: Confidence::Solid,
+            spans: Vec::new(),
+        };
+    }
+
+    if options.normalize_whitespace {
+        normalize_whitespace_tokens(&mut tokens, mode_flattens_lines(options.mode));
     }
 
     let profile = profile_for_locale(options.locale);
@@ -56,6 +104,23 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
         .chain(word_indices.last())
         .copied()
         .collect();
+
+    // Rewrite subtitle separators to the requested style. The flags were read
+    // above, before this changes any punctuation text.
+    let separator_rewrites = normalize_separator_tokens(
+        &mut tokens,
+        &subtitle_separators,
+        options.subtitle_separator_style,
+    );
+
+    // Per-word-token rule: which cascade branch decided it. Byte ranges come from
+    // each token's own `source`, so no offsets are threaded here. Only the
+    // analysis path allocates.
+    let mut word_rules: Vec<Option<CasingRule>> = if RECORD {
+        vec![None; tokens.len()]
+    } else {
+        Vec::new()
+    };
 
     let mut sentence_start = true;
     let mut after_subtitle = false;
@@ -85,41 +150,21 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
                     previous_word: previous_word.as_deref(),
                     previous_word2: previous_word2.as_deref(),
                 };
-                // A known canonical form wins over acronym/mixed-case
-                // preservation, so "GITHUB" becomes "GitHub"; an all-caps word
-                // absent from the lexicon ("NASA") is still preserved.
-                // Titles always carry the signal; elsewhere the input must
-                // have cased the word itself, in a sentence where capitals
-                // mean something.
-                let casing_signal = mode_is_title(options.mode)
-                    || (original != lower
-                        && !sentence_shouting[sentence_ids[index]]
-                        && !sentence_title_like[sentence_ids[index]]);
-                let canonical = options
-                    .preserve_known_proper_nouns
-                    .then(|| lookup_word(options, &lower, casing_signal));
-                token.text = if let Some(Some(canonical)) = canonical {
-                    canonical
-                } else if (options.preserve_acronyms
-                    && !sentence_shouting[sentence_ids[index]]
-                    && is_acronym_candidate(&original))
-                    || (options.preserve_mixed_case && is_mixed_case(&original))
-                {
-                    original
-                } else if options.preserve_existing_capitals
-                    && mode_is_sentence_like(options.mode)
-                    && !at_sentence_cap
-                    && !sentence_shouting[sentence_ids[index]]
-                    && !sentence_title_like[sentence_ids[index]]
-                    && is_simple_capitalized(&original)
-                {
-                    // A lone capitalized word in an otherwise lowercase
-                    // sentence is an unknown proper noun; lowercasing it
-                    // would destroy information no lexicon can restore.
-                    original
-                } else {
-                    recase_word(&original, &lower, options, profile, recase_context)
-                };
+                let shouting = sentence_shouting[sentence_ids[index]];
+                let title_like = sentence_title_like[sentence_ids[index]];
+                let (text, rule) = decide_word(
+                    original,
+                    &lower,
+                    options,
+                    profile,
+                    recase_context,
+                    shouting,
+                    title_like,
+                );
+                token.text = text;
+                if RECORD {
+                    word_rules[index] = Some(rule);
+                }
                 sentence_start = false;
                 after_subtitle = false;
                 previous_word2 = previous_word.take();
@@ -145,11 +190,164 @@ pub fn convert(input: &str, options: &CaseOptions<'_>) -> String {
         }
     }
 
-    if options.preserve_known_proper_nouns {
-        apply_phrase_replacements(&mut tokens, options, &sentence_start_words);
+    let merges = if options.preserve_known_proper_nouns {
+        apply_phrase_replacements(&mut tokens, options, &sentence_start_words)
+    } else {
+        Vec::new()
+    };
+
+    let output = reconstruct(&tokens);
+    if !RECORD {
+        return CaseAnalysis {
+            output,
+            confidence: Confidence::Solid,
+            spans: Vec::new(),
+        };
+    }
+    let spans = build_spans(
+        input,
+        &output,
+        &tokens,
+        &word_rules,
+        &merges,
+        &separator_rewrites,
+    );
+    let confidence = spans.iter().fold(Confidence::Solid, |worst, span| {
+        worst.most_concerning(span.confidence)
+    });
+    CaseAnalysis {
+        output,
+        confidence,
+        spans,
+    }
+}
+
+/// Decides one word's casing and returns the produced text plus the rule behind
+/// it. The single source of truth for the per-word cascade; the returned rule is
+/// a compile-time constant per branch, so it costs nothing on the plain path,
+/// where the caller discards it.
+fn decide_word(
+    original: String,
+    lower: &str,
+    options: &CaseOptions<'_>,
+    profile: crate::lang::LanguageProfile,
+    recase_context: RecaseContext<'_>,
+    shouting: bool,
+    title_like: bool,
+) -> (String, CasingRule) {
+    // A known canonical form wins over acronym/mixed-case preservation, so
+    // "GITHUB" becomes "GitHub"; an all-caps word absent from the lexicon
+    // ("NASA") is still preserved. Titles always carry the signal; elsewhere the
+    // input must have cased the word itself, in a sentence where capitals mean
+    // something.
+    let casing_signal =
+        mode_is_title(options.mode) || (original != *lower && !shouting && !title_like);
+    if options.preserve_known_proper_nouns
+        && let Some(canonical) = lookup_word(options, lower, casing_signal)
+    {
+        return (canonical, CasingRule::CanonicalLexicon);
+    }
+    if options.preserve_acronyms && !shouting && is_acronym_candidate(&original) {
+        return (original, CasingRule::AcronymPreserved);
+    }
+    if options.preserve_mixed_case && is_mixed_case(&original) {
+        return (original, CasingRule::MixedCasePreserved);
+    }
+    if options.preserve_existing_capitals
+        && mode_is_sentence_like(options.mode)
+        && !recase_context.should_capitalize
+        && !shouting
+        && !title_like
+        && is_simple_capitalized(&original)
+    {
+        // A lone capitalized word in an otherwise lowercase sentence is an
+        // unknown proper noun; lowercasing it would destroy information no
+        // lexicon can restore.
+        return (original, CasingRule::ProperNounPreserved);
+    }
+    recase_word(&original, lower, options, profile, recase_context)
+}
+
+/// Assembles the final spans from raw token ranges. A multiword-lexicon phrase
+/// and a rewritten subtitle separator each collapse to one span covering their
+/// tokens; every word contributes a span (changed or not); a whitespace token
+/// contributes one only when normalization altered it. `source` ranges come from
+/// each token's raw `source`; `output` ranges from cumulative output positions.
+fn build_spans(
+    input: &str,
+    output: &str,
+    tokens: &[Token],
+    word_rules: &[Option<CasingRule>],
+    phrase_merges: &[(usize, usize)],
+    separator_rewrites: &[(usize, usize)],
+) -> Vec<CasingSpan> {
+    // First-token index -> (last-token index, rule) for the merged transforms,
+    // and the interior tokens they absorb (so those emit no separate span).
+    let mut merged: HashMap<usize, (usize, CasingRule)> = HashMap::new();
+    let mut absorbed: HashSet<usize> = HashSet::new();
+    for &(first, last) in phrase_merges {
+        merged.insert(first, (last, CasingRule::MultiwordLexicon));
+        absorbed.extend((first + 1)..=last);
+    }
+    for &(first, last) in separator_rewrites {
+        merged.insert(first, (last, CasingRule::SeparatorNormalized));
+        absorbed.extend((first + 1)..=last);
     }
 
-    reconstruct(&tokens)
+    // Cumulative output byte offset of each token, so a merged span can reach the
+    // end of its last token.
+    let mut out_starts = Vec::with_capacity(tokens.len());
+    let mut acc = 0;
+    for token in tokens {
+        out_starts.push(acc);
+        acc += token.text.len();
+    }
+    let out_end_of = |index: usize| out_starts[index] + tokens[index].text.len();
+
+    let mut spans = Vec::new();
+    for (index, token) in tokens.iter().enumerate() {
+        if absorbed.contains(&index) {
+            continue;
+        }
+        let (source, output_range, rule) = if let Some(&(last, rule)) = merged.get(&index) {
+            (
+                token.source.start..tokens[last].source.end,
+                out_starts[index]..out_end_of(last),
+                rule,
+            )
+        } else if let Some(rule) = word_rules[index] {
+            (
+                token.source.clone(),
+                out_starts[index]..out_end_of(index),
+                rule,
+            )
+        } else if matches!(token.kind, TokenKind::Whitespace)
+            && input[token.source.clone()] != token.text
+        {
+            (
+                token.source.clone(),
+                out_starts[index]..out_end_of(index),
+                CasingRule::WhitespaceCollapsed,
+            )
+        } else {
+            continue;
+        };
+        let changed = input[source.clone()] != output[output_range.clone()];
+        // A separator already in the requested style is not a transformation, so
+        // do not report it; other rules (including WhitespaceCollapsed) still
+        // record their spans whether or not the text changed.
+        if rule == CasingRule::SeparatorNormalized && !changed {
+            continue;
+        }
+        spans.push(CasingSpan {
+            source,
+            output: output_range,
+            rule,
+            confidence: rule.confidence(),
+            changed,
+        });
+    }
+    spans
 }
 
 /// Converts text to sentence case with default options for the given locale.
@@ -183,7 +381,7 @@ fn recase_word(
     options: &CaseOptions<'_>,
     profile: crate::lang::LanguageProfile,
     recase_context: RecaseContext<'_>,
-) -> String {
+) -> (String, CasingRule) {
     if primary_language(options.locale) == "de"
         && let Some(restored) = german::recase_token(
             original,
@@ -201,11 +399,12 @@ fn recase_word(
             && recase_context.should_capitalize)
             || (mode_is_title(options.mode)
                 && (recase_context.should_capitalize || recase_context.is_edge_word));
-        return if needs_capital {
+        let text = if needs_capital {
             uppercase_first_grapheme(&restored, options.locale)
         } else {
             restored
         };
+        return (text, CasingRule::GermanNoun);
     }
 
     if mode_is_title(options.mode) {
@@ -223,24 +422,49 @@ fn recase_word(
             // An elided particle stays lowercase mid-title ("d'Affaires"),
             // but a title-opening or edge word still starts with a capital
             // ("L'Homme").
-            if recase_context.should_capitalize || recase_context.is_edge_word {
-                uppercase_first_grapheme(&cased, options.locale)
+            if recase_context.should_capitalize {
+                (
+                    uppercase_first_grapheme(&cased, options.locale),
+                    CasingRule::SentenceStart,
+                )
+            } else if recase_context.is_edge_word {
+                (
+                    uppercase_first_grapheme(&cased, options.locale),
+                    CasingRule::TitleEdge,
+                )
             } else {
-                cased
+                (cased, CasingRule::Capitalized)
             }
         } else {
-            lowercase_locale(original, options.locale)
+            (
+                lowercase_locale(original, options.locale),
+                CasingRule::SmallWord,
+            )
         }
     } else if mode_is_sentence_like(options.mode) {
         let always_capitalized =
             primary_language(options.locale) == "en" && english_always_capitalized(lower);
-        if recase_context.should_capitalize || always_capitalized {
-            capitalize_word_locale(original, options.locale)
+        if recase_context.should_capitalize {
+            (
+                capitalize_word_locale(original, options.locale),
+                CasingRule::SentenceStart,
+            )
+        } else if always_capitalized {
+            (
+                capitalize_word_locale(original, options.locale),
+                CasingRule::AlwaysCapitalized,
+            )
         } else {
-            lowercase_locale(original, options.locale)
+            (
+                lowercase_locale(original, options.locale),
+                CasingRule::Lowercased,
+            )
         }
     } else {
-        lowercase_locale(original, options.locale)
+        (
+            lowercase_locale(original, options.locale),
+            CasingRule::Lowercased,
+        )
     }
 }
 
@@ -473,17 +697,21 @@ fn lookup_word(options: &CaseOptions<'_>, lower: &str, casing_signal: bool) -> O
     Some(builtin.to_string())
 }
 
+/// Rewrites multiword lexicon phrases in place and returns, for the analysis
+/// path, the `(first_token, last_token)` word-token index pairs it collapsed so
+/// their spans can merge. The plain path discards the return value.
 fn apply_phrase_replacements(
     tokens: &mut [Token],
     options: &CaseOptions<'_>,
     sentence_start_words: &HashSet<usize>,
-) {
+) -> Vec<(usize, usize)> {
     let word_indices: Vec<usize> = tokens
         .iter()
         .enumerate()
         .filter_map(|(index, token)| token.is_word().then_some(index))
         .collect();
 
+    let mut merges = Vec::new();
     let mut cursor = 0;
     while cursor < word_indices.len() {
         let mut matched = None;
@@ -521,11 +749,14 @@ fn apply_phrase_replacements(
             for token in &mut tokens[first + 1..=last] {
                 token.text.clear();
             }
+            merges.push((first, last));
             cursor += span_len;
         } else {
             cursor += 1;
         }
     }
+
+    merges
 }
 
 fn build_phrase_key(tokens: &[Token], span: &[usize], locale: &str) -> String {

@@ -1,94 +1,82 @@
-use crate::{
-    config::SubtitleSeparatorStyle,
-    util::{collapse_whitespace, collapse_whitespace_preserving_newlines},
-};
+use crate::config::SubtitleSeparatorStyle;
+use crate::tokenize::Token;
 
-pub fn normalize_whitespace(input: &str) -> String {
-    collapse_whitespace(input)
+/// Collapses each interior whitespace token to a single space (or a newline,
+/// when `flatten_lines` is false and the run contained one) and trims the
+/// leading and trailing whitespace tokens to empty. Mirrors the old string-level
+/// collapse, but only touches token text: each token's `source` range still maps
+/// back to the raw bytes.
+pub(crate) fn normalize_whitespace_tokens(tokens: &mut [Token], flatten_lines: bool) {
+    let is_content = |token: &Token| !token.is_whitespace();
+    let first_content = tokens.iter().position(is_content);
+    let last_content = tokens.iter().rposition(is_content);
+    // No non-whitespace content means the whole input trims away.
+    let (Some(first_content), Some(last_content)) = (first_content, last_content) else {
+        for token in tokens.iter_mut() {
+            token.text.clear();
+        }
+        return;
+    };
+
+    for (index, token) in tokens.iter_mut().enumerate() {
+        if !token.is_whitespace() {
+            continue;
+        }
+        if index < first_content || index > last_content {
+            token.text.clear();
+        } else {
+            let replacement = if !flatten_lines && token.text.contains('\n') {
+                "\n"
+            } else {
+                " "
+            };
+            if token.text != replacement {
+                token.text.clear();
+                token.text.push_str(replacement);
+            }
+        }
+    }
 }
 
-/// Like [`normalize_whitespace`] but keeps line breaks intact, used for plain
-/// sentence case where multi-line input should stay multi-line.
-pub fn normalize_whitespace_preserving_lines(input: &str) -> String {
-    collapse_whitespace_preserving_newlines(input)
-}
-
-/// Rewrites subtitle separators (`:`, ` - `, ` – `, ` — `) to the requested
-/// style.
-///
-/// A single left-to-right scan replaces each separator in place, so a literal
-/// occurrence of the old sentinel text can no longer collide with the marker.
-/// A separator is only rewritten when it is flanked by word content and is not
-/// a numeric range (`3 - 5`), avoiding false positives on ranges and stray
-/// dashes.
-pub fn normalize_subtitle_separators(input: &str, style: SubtitleSeparatorStyle) -> String {
+/// Rewrites the flagged subtitle separators to `style`, folding each separator's
+/// punctuation and its immediately flanking whitespace into the replacement so
+/// the reconstruction reads exactly `<word><style><word>`. Returns the
+/// `(first_token, last_token)` index pairs it rewrote, so the analysis path can
+/// surface them as transforms; the plain path discards the value. Token `source`
+/// ranges are left untouched.
+pub(crate) fn normalize_separator_tokens(
+    tokens: &mut [Token],
+    separators: &[bool],
+    style: SubtitleSeparatorStyle,
+) -> Vec<(usize, usize)> {
     let replacement = match style {
-        SubtitleSeparatorStyle::Preserve => return input.to_string(),
+        SubtitleSeparatorStyle::Preserve => return Vec::new(),
         SubtitleSeparatorStyle::ColonSpace => ": ",
         SubtitleSeparatorStyle::SpaceDashSpace => " - ",
         SubtitleSeparatorStyle::EmDashSpace => " — ",
     };
 
-    let chars: Vec<char> = input.chars().collect();
-    let mut out = String::with_capacity(input.len());
-    let mut index = 0;
-    while index < chars.len() {
-        if let Some(consumed) = match_separator(&chars, index) {
-            out.push_str(replacement);
-            index += consumed;
-        } else {
-            out.push(chars[index]);
-            index += 1;
+    let mut rewrites = Vec::new();
+    for index in 0..tokens.len() {
+        if !separators.get(index).copied().unwrap_or(false) {
+            continue;
         }
-    }
-    out
-}
+        // Absorb the single space the whitespace normalizer left on each side, if
+        // present; an em-dash may sit directly between words with none.
+        let lead = index > 0 && tokens[index - 1].is_whitespace();
+        let trail = tokens.get(index + 1).is_some_and(Token::is_whitespace);
+        let first = if lead { index - 1 } else { index };
+        let last = if trail { index + 1 } else { index };
 
-/// Returns the number of characters consumed if a valid subtitle separator
-/// starts at `index`.
-fn match_separator(chars: &[char], index: usize) -> Option<usize> {
-    // " <sep> ": space, separator, space.
-    if chars[index] == ' '
-        && matches!(chars.get(index + 1), Some('—' | '–' | '-' | ':'))
-        && chars.get(index + 2) == Some(&' ')
-    {
-        return valid_context(chars, index.wrapping_sub(1), index + 3).then_some(3);
+        tokens[index].text.clear();
+        tokens[index].text.push_str(replacement);
+        if lead {
+            tokens[index - 1].text.clear();
+        }
+        if trail {
+            tokens[index + 1].text.clear();
+        }
+        rewrites.push((first, last));
     }
-
-    // ": ": colon, space — only when not already covered by the spaced form
-    // above (i.e. not preceded by a space).
-    if chars[index] == ':'
-        && chars.get(index + 1) == Some(&' ')
-        && prev_char(chars, index) != Some(' ')
-    {
-        return valid_context(chars, index.wrapping_sub(1), index + 2).then_some(2);
-    }
-
-    None
-}
-
-fn prev_char(chars: &[char], index: usize) -> Option<char> {
-    index.checked_sub(1).and_then(|p| chars.get(p)).copied()
-}
-
-/// A separator only splits a title when both sides carry word content, and not
-/// when the flanking words form a range: two numbers (`3 - 5`, `10 - 20`) or
-/// two single characters (`a - z`).
-fn valid_context(chars: &[char], prev_index: usize, next_index: usize) -> bool {
-    let (Some(&prev), Some(&next)) = (chars.get(prev_index), chars.get(next_index)) else {
-        return false;
-    };
-    if !prev.is_alphanumeric() || !next.is_alphanumeric() {
-        return false;
-    }
-    if prev.is_ascii_digit() && next.is_ascii_digit() {
-        return false;
-    }
-    let prev_is_single = !chars
-        .get(prev_index.wrapping_sub(1))
-        .is_some_and(|ch| ch.is_alphanumeric());
-    let next_is_single = !chars
-        .get(next_index + 1)
-        .is_some_and(|ch| ch.is_alphanumeric());
-    !(prev_is_single && next_is_single)
+    rewrites
 }

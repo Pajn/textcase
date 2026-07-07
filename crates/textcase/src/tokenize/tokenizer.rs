@@ -1,32 +1,36 @@
 use super::{Token, TokenKind};
 
 pub fn tokenize(input: &str) -> Vec<Token> {
-    let mut chars = input.chars().peekable();
+    // `char_indices` gives the byte offset of each char, so every token can
+    // record its range in the raw input; `end` tracks the byte just past the
+    // last char consumed for the current token.
+    let mut chars = input.char_indices().peekable();
     let mut tokens = Vec::new();
 
-    while let Some(ch) = chars.next() {
+    while let Some((start, ch)) = chars.next() {
+        let mut end = start + ch.len_utf8();
+
         if ch.is_whitespace() {
-            let mut text = String::from(ch);
-            while let Some(next) = chars.peek() {
+            while let Some(&(index, next)) = chars.peek() {
                 if next.is_whitespace() {
-                    text.push(*next);
+                    end = index + next.len_utf8();
                     chars.next();
                 } else {
                     break;
                 }
             }
             tokens.push(Token {
-                text,
+                text: input[start..end].to_string(),
                 kind: TokenKind::Whitespace,
+                source: start..end,
             });
             continue;
         }
 
         if is_word_start(ch) {
-            let mut text = String::from(ch);
-            while let Some(&next) = chars.peek() {
+            while let Some(&(index, next)) = chars.peek() {
                 if next.is_alphanumeric() {
-                    text.push(next);
+                    end = index + next.len_utf8();
                     chars.next();
                 } else if is_word_connector(next) {
                     // A connector (apostrophe or hyphen) stays inside the word
@@ -35,8 +39,8 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                     // glued onto the word.
                     let mut lookahead = chars.clone();
                     lookahead.next();
-                    if lookahead.peek().is_some_and(|c| c.is_alphanumeric()) {
-                        text.push(next);
+                    if lookahead.peek().is_some_and(|(_, c)| c.is_alphanumeric()) {
+                        end = index + next.len_utf8();
                         chars.next();
                     } else {
                         break;
@@ -46,8 +50,9 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 }
             }
             tokens.push(Token {
-                text,
+                text: input[start..end].to_string(),
                 kind: TokenKind::Word,
+                source: start..end,
             });
             continue;
         }
@@ -65,8 +70,9 @@ pub fn tokenize(input: &str) -> Vec<Token> {
         };
 
         tokens.push(Token {
-            text: ch.to_string(),
+            text: input[start..end].to_string(),
             kind,
+            source: start..end,
         });
     }
 

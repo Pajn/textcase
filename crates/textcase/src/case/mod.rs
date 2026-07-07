@@ -3,9 +3,11 @@ mod sentence;
 mod subtitle;
 mod title;
 
-use crate::config::{CaseMode, CaseOptions};
+use crate::config::CaseMode;
 
-pub use sentence::{convert, sentence_case, sentence_case_title};
+pub use sentence::{
+    convert, convert_analyze, sentence_case, sentence_case_analyze, sentence_case_title,
+};
 
 pub(crate) fn mode_is_title(mode: CaseMode) -> bool {
     matches!(mode, CaseMode::Title)
@@ -29,21 +31,6 @@ pub(crate) fn mode_flattens_lines(mode: CaseMode) -> bool {
     matches!(mode, CaseMode::Title | CaseMode::SentenceTitle)
 }
 
-pub(crate) use normalize::{
-    normalize_subtitle_separators, normalize_whitespace, normalize_whitespace_preserving_lines,
-};
+pub(crate) use normalize::{normalize_separator_tokens, normalize_whitespace_tokens};
 pub(crate) use subtitle::subtitle_separator_flags;
 pub(crate) use title::should_keep_lowercase_in_title;
-
-pub(crate) fn prepare_input(input: &str, options: &CaseOptions<'_>) -> String {
-    let whitespace = if options.normalize_whitespace {
-        if mode_flattens_lines(options.mode) {
-            normalize_whitespace(input)
-        } else {
-            normalize_whitespace_preserving_lines(input)
-        }
-    } else {
-        input.to_string()
-    };
-    normalize_subtitle_separators(&whitespace, options.subtitle_separator_style)
-}
