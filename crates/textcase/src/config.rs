@@ -2,6 +2,7 @@ use crate::lexicon::LexiconProvider;
 
 /// Selects the conversion strategy.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CaseMode {
     Sentence,
     Title,
@@ -10,6 +11,7 @@ pub enum CaseMode {
 
 /// Controls subtitle separator normalization.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum SubtitleSeparatorStyle {
     Preserve,
     ColonSpace,
@@ -19,6 +21,7 @@ pub enum SubtitleSeparatorStyle {
 
 /// Controls the German heuristic level.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[non_exhaustive]
 pub enum GermanMode {
     Conservative,
     Balanced,
@@ -26,7 +29,19 @@ pub enum GermanMode {
 }
 
 /// Controls conversion behavior.
+///
+/// Construct with [`CaseOptions::for_locale`] (or [`CaseOptions::default`]) and
+/// then set the fields you need; the struct is `#[non_exhaustive]` so that new
+/// options can be added without breaking existing callers:
+///
+/// ```
+/// use textcase::{CaseMode, CaseOptions};
+///
+/// let mut options = CaseOptions::for_locale("de");
+/// options.mode = CaseMode::Title;
+/// ```
 #[derive(Clone, Copy)]
+#[non_exhaustive]
 pub struct CaseOptions<'a> {
     pub locale: &'a str,
     pub mode: CaseMode,

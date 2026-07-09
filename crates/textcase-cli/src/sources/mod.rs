@@ -716,6 +716,7 @@ pub fn prepare_source(
         PreparedKind::RankedCandidates => {
             PreparedPayload::RankedCandidates(ranked::build(&records))
         }
+        other => return Err(format!("unsupported prepared kind: {other:?}").into()),
     };
 
     Ok(PreparedLexicon {
@@ -761,5 +762,6 @@ fn kind_label(kind: PreparedKind) -> &'static str {
         PreparedKind::MultiwordMap => "multiword-map",
         PreparedKind::RankedCandidates => "ranked-candidates",
         PreparedKind::ProtectedForms => "protected-forms",
+        _ => "unknown",
     }
 }

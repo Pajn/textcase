@@ -1,6 +1,7 @@
 use crate::plugin::{PluginMetadata, PluginSchema};
 
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct PluginInspection {
     pub name: String,
     pub kind: String,

@@ -2,16 +2,16 @@
 // and run as doctests and cannot silently go stale.
 #![doc = include_str!("../README.md")]
 
-pub mod analysis;
-pub mod case;
-pub mod config;
-pub mod error;
-pub mod icu;
-pub mod lang;
+mod analysis;
+mod case;
+mod config;
+mod error;
+mod icu;
+mod lang;
 pub mod lexicon;
 pub mod plugin;
-pub mod tokenize;
-pub mod util;
+mod tokenize;
+mod util;
 
 pub use analysis::{CaseAnalysis, CasingRule, CasingSpan, Confidence};
 pub use case::{

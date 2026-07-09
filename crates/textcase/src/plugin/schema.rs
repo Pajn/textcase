@@ -24,6 +24,7 @@ impl Default for SchemaVersion {
 /// Supported plugin payload kinds.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
 pub enum PluginKind {
     WordSet,
     CanonicalMap,
@@ -69,6 +70,7 @@ pub struct PluginMetadata {
 /// Payload values stored in a JSON plugin.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(tag = "payload_kind", content = "payload", rename_all = "kebab-case")]
+#[non_exhaustive]
 pub enum PluginPayload {
     WordSet(Vec<String>),
     CanonicalMap(BTreeMap<String, String>),

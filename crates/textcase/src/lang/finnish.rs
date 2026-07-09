@@ -2,7 +2,6 @@ use super::LanguageProfile;
 
 pub fn profile() -> LanguageProfile {
     LanguageProfile {
-        locale: "fi",
         stop_words: &["ja", "mutta", "sekä", "tai", "vaan"],
         title_abbreviations: &["prof", "tri", "hra", "rva"],
         numeric_abbreviations: &["nro", "vol"],

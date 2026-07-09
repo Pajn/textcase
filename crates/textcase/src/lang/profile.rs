@@ -2,13 +2,8 @@ use crate::tokenize::AbbreviationKind;
 
 #[derive(Clone, Copy, Debug)]
 pub struct LanguageProfile {
-    pub locale: &'static str,
     pub stop_words: &'static [&'static str],
     pub lowercase_particles: &'static [&'static str],
-    pub noun_articles: &'static [&'static str],
-    pub noun_prepositions: &'static [&'static str],
-    pub noun_suffixes: &'static [&'static str],
-    pub ambiguous_lowercase: &'static [&'static str],
     /// Abbreviations followed by a name or a continuing phrase ("Dr. Smith");
     /// a period after one never ends the sentence.
     pub title_abbreviations: &'static [&'static str],
@@ -32,13 +27,8 @@ impl LanguageProfile {
     /// words and particles.
     pub const fn neutral() -> Self {
         Self {
-            locale: "und",
             stop_words: &[],
             lowercase_particles: &[],
-            noun_articles: &[],
-            noun_prepositions: &[],
-            noun_suffixes: &[],
-            ambiguous_lowercase: &[],
             title_abbreviations: &["dr", "prof", "st"],
             numeric_abbreviations: &["no", "vol", "fig"],
             trailing_abbreviations: &["etc"],

@@ -41,12 +41,9 @@ assert_eq!(
     "The rise of GitHub - inside rust tooling"
 );
 
-let options = CaseOptions {
-    locale: "en",
-    mode: CaseMode::SentenceTitle,
-    subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
-    ..CaseOptions::default()
-};
+let mut options = CaseOptions::for_locale("en");
+options.mode = CaseMode::SentenceTitle;
+options.subtitle_separator_style = SubtitleSeparatorStyle::ColonSpace;
 assert_eq!(
     convert("the rise of github - inside rust tooling", &options),
     "The rise of GitHub: Inside rust tooling"
