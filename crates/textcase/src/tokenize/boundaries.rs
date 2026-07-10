@@ -25,19 +25,6 @@ pub enum AbbreviationKind {
     Trailing,
 }
 
-/// Classifies a lowercased word using the English abbreviation lists. Prefer
-/// `LanguageProfile::abbreviation_kind` for locale-aware behavior; the lists
-/// live in the language profiles.
-pub fn abbreviation_kind(word: &str) -> Option<AbbreviationKind> {
-    crate::lang::profile_for_locale("en").abbreviation_kind(word)
-}
-
-/// Returns `true` for a lowercased word that is a known English abbreviation
-/// of any [`AbbreviationKind`].
-pub fn is_abbreviation(word: &str) -> bool {
-    abbreviation_kind(word).is_some()
-}
-
 pub fn is_subtitle_separator(text: &str) -> bool {
     matches!(text, ":" | "-" | "–" | "—")
 }

@@ -13,6 +13,7 @@ use super::Candidate;
 /// Payload kinds supported by prepared lexicon files.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
 pub enum PreparedKind {
     WordSet,
     CanonicalMap,
@@ -37,6 +38,7 @@ impl PreparedKind {
 /// Payload values stored in a prepared lexicon file before plugin generation.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(tag = "payload_kind", content = "payload", rename_all = "kebab-case")]
+#[non_exhaustive]
 pub enum PreparedPayload {
     WordSet(Vec<String>),
     CanonicalMap(BTreeMap<String, String>),

@@ -15,10 +15,7 @@ fn main() {
     });
     let bytes = serde_json::to_vec(&plugin).unwrap();
     let lexicons = PluginSet::from_json_bytes(&bytes).unwrap();
-    let options = CaseOptions {
-        locale: "en",
-        lexicons: Some(&lexicons),
-        ..CaseOptions::default()
-    };
+    let mut options = CaseOptions::for_locale("en");
+    options.lexicons = Some(&lexicons);
     println!("{}", convert("github in berlin", &options));
 }

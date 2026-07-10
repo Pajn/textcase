@@ -23,16 +23,20 @@ pub struct FstSidecar {
     pub candidate_values: Vec<Vec<crate::lexicon::Candidate>>,
 }
 
-pub enum FstPayload {
+pub(crate) enum FstPayload {
     Set(Set<Mmap>),
     Map(Map<Mmap>),
 }
 
+/// An FST plugin loaded from disk. Construct one with
+/// [`LoadedFstPlugin::from_path`]; the backing FST payload is an internal
+/// detail, so only the metadata and entry count are exposed.
 pub struct LoadedFstPlugin {
+    /// Metadata read from the plugin's sidecar file.
     pub metadata: PluginMetadata,
-    pub payload: FstPayload,
-    pub values: Vec<String>,
-    pub candidate_values: Vec<Vec<crate::lexicon::Candidate>>,
+    pub(crate) payload: FstPayload,
+    pub(crate) values: Vec<String>,
+    pub(crate) candidate_values: Vec<Vec<crate::lexicon::Candidate>>,
 }
 
 impl LoadedFstPlugin {

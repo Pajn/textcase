@@ -4,6 +4,7 @@ use thiserror::Error;
 
 /// Errors returned by `textcase` when converting text or loading plugins.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum Error {
     #[error("unsupported locale: {0}")]
     UnsupportedLocale(String),

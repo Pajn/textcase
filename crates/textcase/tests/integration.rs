@@ -13,6 +13,17 @@ use textcase::{
     convert, convert_analyze, sentence_case, sentence_case_analyze, sentence_case_title,
 };
 
+/// Builds a [`CaseOptions`] from a list of field assignments over the default.
+/// `CaseOptions` is `#[non_exhaustive]`, so it cannot be built with a struct
+/// literal from outside the crate; this keeps the tests concise.
+macro_rules! options {
+    ($($field:ident : $value:expr),* $(,)?) => {{
+        let mut options = CaseOptions::default();
+        $(options.$field = $value;)*
+        options
+    }};
+}
+
 #[test]
 fn sentence_case_splits_on_cjk_terminals() {
     // A CJK full stop starts a new sentence even without a following space, so
@@ -63,16 +74,14 @@ fn greek_lowercases_to_final_sigma() {
 #[test]
 fn unknown_locale_gets_neutral_profile_not_english() {
     // English stop words must not leak into languages without a profile.
-    let polish = CaseOptions {
+    let polish = options! {
         locale: "pl",
         mode: CaseMode::Title,
-        ..CaseOptions::default()
     };
     assert_eq!(convert("all of the things", &polish), "All Of The Things");
-    let english = CaseOptions {
+    let english = options! {
         locale: "en",
         mode: CaseMode::Title,
-        ..CaseOptions::default()
     };
     assert_eq!(convert("all of the things", &english), "All of the Things");
 }
@@ -112,10 +121,9 @@ fn sentence_case_preserves_mid_sentence_proper_nouns() {
 
 #[test]
 fn sentence_case_can_disable_existing_capital_preservation() {
-    let options = CaseOptions {
+    let options = options! {
         locale: "en",
         preserve_existing_capitals: false,
-        ..CaseOptions::default()
     };
     assert_eq!(
         convert("yesterday Alice met Bob", &options),
@@ -161,20 +169,18 @@ fn sentence_case_recases_quoted_known_forms() {
 
 #[test]
 fn title_case_capitalizes_single_letter_apostrophe_prefix() {
-    let options = CaseOptions {
+    let options = options! {
         locale: "en",
         mode: CaseMode::Title,
-        ..CaseOptions::default()
     };
     assert_eq!(convert("the o'brien files", &options), "The O'Brien Files");
 }
 
 #[test]
 fn french_title_keeps_elided_particles_lowercase() {
-    let options = CaseOptions {
+    let options = options! {
         locale: "fr",
         mode: CaseMode::Title,
-        ..CaseOptions::default()
     };
     // Mid-title the elided particle stays lowercase; the title-opening word
     // still starts with a capital.
@@ -209,10 +215,9 @@ fn sentence_case_does_not_split_hyphenated_word() {
 #[test]
 fn title_case_splits_hyphenated_names() {
     // Title mode still capitalizes each hyphen-separated part.
-    let options = CaseOptions {
+    let options = options! {
         locale: "en",
         mode: CaseMode::Title,
-        ..CaseOptions::default()
     };
     assert_eq!(convert("jean-paul sartre", &options), "Jean-Paul Sartre");
     assert_eq!(convert("coca-cola", &options), "Coca-Cola");
@@ -222,10 +227,9 @@ fn title_case_splits_hyphenated_names() {
 fn title_case_keeps_single_letter_contractions() {
     // A single-letter prefix followed by a contraction tail stays one word,
     // unlike the O'Brien name-particle split above.
-    let options = CaseOptions {
+    let options = options! {
         locale: "en",
         mode: CaseMode::Title,
-        ..CaseOptions::default()
     };
     assert_eq!(
         convert("i'm i'll i've y'all", &options),
@@ -393,10 +397,9 @@ fn sentence_case_gates_ambiguous_builtin_forms_on_casing() {
         "We love Rust dearly"
     );
     // A title always carries the signal.
-    let title = CaseOptions {
+    let title = options! {
         locale: "en",
         mode: CaseMode::Title,
-        ..CaseOptions::default()
     };
     assert_eq!(
         convert("programming in rust", &title),
@@ -428,10 +431,9 @@ fn user_lexicon_overrides_builtin_forms() {
     );
     let bytes = serde_json::to_vec(&prepared.to_plugin_schema()).unwrap();
     let lexicons = PluginSet::from_json_bytes(&bytes).unwrap();
-    let options = CaseOptions {
+    let options = options! {
         locale: "en",
         lexicons: Some(&lexicons),
-        ..CaseOptions::default()
     };
     assert_eq!(
         convert("using github daily", &options),
@@ -482,11 +484,10 @@ fn sentence_case_does_not_capitalize_after_colon() {
 
 #[test]
 fn sentence_title_still_capitalizes_after_colon() {
-    let options = CaseOptions {
+    let options = options! {
         locale: "en",
         mode: CaseMode::SentenceTitle,
         subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
-        ..CaseOptions::default()
     };
     assert_eq!(
         convert("note: this is important", &options),
@@ -496,11 +497,10 @@ fn sentence_title_still_capitalizes_after_colon() {
 
 #[test]
 fn title_case_capitalizes_first_word_after_colon() {
-    let options = CaseOptions {
+    let options = options! {
         locale: "en",
         mode: CaseMode::Title,
         subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
-        ..CaseOptions::default()
     };
     assert_eq!(
         convert("something: the reckoning", &options),
@@ -510,10 +510,9 @@ fn title_case_capitalizes_first_word_after_colon() {
 
 #[test]
 fn subtitle_normalization_ignores_numeric_ranges() {
-    let options = CaseOptions {
+    let options = options! {
         locale: "en",
         subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
-        ..CaseOptions::default()
     };
     assert_eq!(
         convert("tracks 3 - 5 remastered", &options),
@@ -523,21 +522,19 @@ fn subtitle_normalization_ignores_numeric_ranges() {
 
 #[test]
 fn subtitle_normalization_preserves_literal_sentinel_text() {
-    let options = CaseOptions {
+    let options = options! {
         locale: "en",
         subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
-        ..CaseOptions::default()
     };
     assert_eq!(convert("a <subtitle> b", &options), "A <subtitle> b");
 }
 
 #[test]
 fn subtitle_normalization_converts_flanked_dash() {
-    let options = CaseOptions {
+    let options = options! {
         locale: "en",
         mode: CaseMode::SentenceTitle,
         subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
-        ..CaseOptions::default()
     };
     assert_eq!(
         convert("the album - remastered", &options),
@@ -569,10 +566,9 @@ fn sentence_title_capitalizes_after_attached_em_dash() {
 
 #[test]
 fn subtitle_normalization_ignores_letter_ranges() {
-    let options = CaseOptions {
+    let options = options! {
         locale: "en",
         subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
-        ..CaseOptions::default()
     };
     assert_eq!(
         convert("grades a - f explained", &options),
@@ -582,11 +578,10 @@ fn subtitle_normalization_ignores_letter_ranges() {
 
 #[test]
 fn sentence_title_capitalizes_after_subtitle_separator() {
-    let options = CaseOptions {
+    let options = options! {
         locale: "en",
         mode: CaseMode::SentenceTitle,
         subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
-        ..CaseOptions::default()
     };
     // Lowercase "rust" carries no casing signal in a sentence-like mode, so
     // the ambiguous builtin form is not restored.
@@ -598,10 +593,9 @@ fn sentence_title_capitalizes_after_subtitle_separator() {
 
 #[test]
 fn title_case_keeps_small_words_lowercase() {
-    let options = CaseOptions {
+    let options = options! {
         locale: "en",
         mode: CaseMode::Title,
-        ..CaseOptions::default()
     };
     assert_eq!(
         convert("war and peace in europe", &options),
@@ -645,11 +639,10 @@ fn german_aggressive_mode_still_capitalizes_sentence_start() {
     );
     let bytes = serde_json::to_vec(&prepared.to_plugin_schema()).unwrap();
     let lexicons = PluginSet::from_json_bytes(&bytes).unwrap();
-    let options = CaseOptions {
+    let options = options! {
         locale: "de",
         german_mode: GermanMode::Aggressive,
         lexicons: Some(&lexicons),
-        ..CaseOptions::default()
     };
     assert_eq!(convert("wir sind hier", &options), "Wir sind hier");
 }
@@ -670,13 +663,12 @@ fn german_title_capitalizes_after_colon_over_lexicon() {
     );
     let bytes = serde_json::to_vec(&prepared.to_plugin_schema()).unwrap();
     let lexicons = PluginSet::from_json_bytes(&bytes).unwrap();
-    let options = CaseOptions {
+    let options = options! {
         locale: "de",
         mode: CaseMode::Title,
         german_mode: GermanMode::Aggressive,
         subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
         lexicons: Some(&lexicons),
-        ..CaseOptions::default()
     };
     // "wort" opens the subtitle, so it must be capitalized even though the
     // lexicon's canonical form for it is lowercase.
@@ -699,10 +691,9 @@ fn json_plugin_restores_known_forms() {
     );
     let bytes = serde_json::to_vec(&prepared.to_plugin_schema()).unwrap();
     let lexicons = PluginSet::from_json_bytes(&bytes).unwrap();
-    let options = CaseOptions {
+    let options = options! {
         locale: "en",
         lexicons: Some(&lexicons),
-        ..CaseOptions::default()
     };
     assert_eq!(
         convert("berlin and new york", &options),
@@ -774,22 +765,22 @@ fn analysis_output_matches_plain_conversion() {
     let lexicons = analysis_lexicon();
     let option_sets = [
         CaseOptions::for_locale("en"),
-        CaseOptions {
+        options! {
             mode: CaseMode::Title,
-            ..CaseOptions::for_locale("en")
+            locale: "en",
         },
-        CaseOptions {
+        options! {
             mode: CaseMode::SentenceTitle,
             subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
-            ..CaseOptions::for_locale("en")
+            locale: "en",
         },
-        CaseOptions {
+        options! {
             german_mode: GermanMode::Balanced,
-            ..CaseOptions::for_locale("de")
+            locale: "de",
         },
-        CaseOptions {
+        options! {
             lexicons: Some(&lexicons),
-            ..CaseOptions::for_locale("en")
+            locale: "en",
         },
     ];
     for options in &option_sets {
@@ -856,9 +847,9 @@ fn analysis_flags_preserved_lone_capital_as_heuristic() {
 
 #[test]
 fn analysis_reports_title_small_words_and_edges() {
-    let options = CaseOptions {
+    let options = options! {
         mode: CaseMode::Title,
-        ..CaseOptions::for_locale("en")
+        locale: "en",
     };
     let analysis = convert_analyze("the wind in the willows", &options);
     assert_eq!(analysis.output, "The Wind in the Willows");
@@ -883,9 +874,9 @@ fn analysis_reports_title_small_words_and_edges() {
 #[test]
 fn analysis_merges_multiword_lexicon_into_one_span() {
     let lexicons = analysis_lexicon();
-    let options = CaseOptions {
+    let options = options! {
         lexicons: Some(&lexicons),
-        ..CaseOptions::for_locale("en")
+        locale: "en",
     };
     let analysis = convert_analyze("alice met bob in new york", &options);
     assert_eq!(analysis.output, "Alice met bob in New York");
@@ -948,10 +939,10 @@ fn analysis_reports_whitespace_collapse_transform() {
 fn analysis_reports_separator_normalization_transform() {
     // Rewriting " - " to ": " surfaces as one SeparatorNormalized span covering
     // the raw separator, mapping it to the produced output.
-    let options = CaseOptions {
+    let options = options! {
         mode: CaseMode::SentenceTitle,
         subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
-        ..CaseOptions::for_locale("en")
+        locale: "en",
     };
     let raw = "the album - remastered";
     let analysis = convert_analyze(raw, &options);
@@ -1002,10 +993,9 @@ fn fst_plugin_round_trip_restores_forms() {
     write_map(&path, &map, &sidecar).unwrap();
 
     let lexicons = PluginSet::from_fst_path(&path).unwrap();
-    let options = CaseOptions {
+    let options = options! {
         locale: "en",
         lexicons: Some(&lexicons),
-        ..CaseOptions::default()
     };
     assert_eq!(convert("github in berlin", &options), "GitHub in Berlin");
 
@@ -1033,11 +1023,10 @@ fn german_aggressive_mode_ignores_noise_candidates() {
     );
     let bytes = serde_json::to_vec(&prepared.to_plugin_schema()).unwrap();
     let lexicons = PluginSet::from_json_bytes(&bytes).unwrap();
-    let options = CaseOptions {
+    let options = options! {
         locale: "de",
         german_mode: GermanMode::Aggressive,
         lexicons: Some(&lexicons),
-        ..CaseOptions::default()
     };
     // The below-threshold candidate is ignored, and the balanced article
     // heuristic still capitalizes the noun.
@@ -1049,15 +1038,13 @@ fn german_aggressive_mode_ignores_noise_candidates() {
 
 #[test]
 fn german_balanced_mode_recovers_common_noun_context() {
-    let conservative = CaseOptions {
+    let conservative = options! {
         locale: "de",
         german_mode: GermanMode::Conservative,
-        ..CaseOptions::default()
     };
-    let balanced = CaseOptions {
+    let balanced = options! {
         locale: "de",
         german_mode: GermanMode::Balanced,
-        ..CaseOptions::default()
     };
     assert_eq!(
         convert("ich mag die wissenschaft", &conservative),
@@ -1071,10 +1058,9 @@ fn german_balanced_mode_recovers_common_noun_context() {
 
 #[test]
 fn german_balanced_mode_does_not_carry_article_across_punctuation() {
-    let balanced = CaseOptions {
+    let balanced = options! {
         locale: "de",
         german_mode: GermanMode::Balanced,
-        ..CaseOptions::default()
     };
     // "der" is an article, but the comma ends the phrase, so the adverb
     // "gestern" must not be capitalized as if it were the article's noun.
@@ -1109,11 +1095,10 @@ fn german_aggressive_mode_uses_ranked_candidates() {
     );
     let bytes = serde_json::to_vec(&prepared.to_plugin_schema()).unwrap();
     let lexicons = PluginSet::from_json_bytes(&bytes).unwrap();
-    let options = CaseOptions {
+    let options = options! {
         locale: "de",
         german_mode: GermanMode::Aggressive,
         lexicons: Some(&lexicons),
-        ..CaseOptions::default()
     };
     assert_eq!(
         convert("sprache und analyse", &options),

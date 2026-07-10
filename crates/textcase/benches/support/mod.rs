@@ -25,29 +25,23 @@ pub fn long_text() -> String {
 }
 
 pub fn sentence_options<'a>() -> CaseOptions<'a> {
-    CaseOptions {
-        locale: "en",
-        mode: CaseMode::Sentence,
-        ..CaseOptions::default()
-    }
+    let mut options = CaseOptions::for_locale("en");
+    options.mode = CaseMode::Sentence;
+    options
 }
 
 pub fn title_options<'a>() -> CaseOptions<'a> {
-    CaseOptions {
-        locale: "en",
-        mode: CaseMode::SentenceTitle,
-        ..CaseOptions::default()
-    }
+    let mut options = CaseOptions::for_locale("en");
+    options.mode = CaseMode::SentenceTitle;
+    options
 }
 
 pub fn german_options<'a>(mode: GermanMode, lexicons: Option<&'a PluginSet>) -> CaseOptions<'a> {
-    CaseOptions {
-        locale: "de",
-        mode: CaseMode::Sentence,
-        german_mode: mode,
-        lexicons: lexicons.map(|provider| provider as &dyn LexiconProvider),
-        ..CaseOptions::default()
-    }
+    let mut options = CaseOptions::for_locale("de");
+    options.mode = CaseMode::Sentence;
+    options.german_mode = mode;
+    options.lexicons = lexicons.map(|provider| provider as &dyn LexiconProvider);
+    options
 }
 
 pub fn canonical_map(count: usize) -> BTreeMap<String, String> {

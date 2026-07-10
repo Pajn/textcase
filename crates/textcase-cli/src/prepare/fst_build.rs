@@ -32,6 +32,7 @@ pub fn build_fst_plugin(
             }
             write_map(output, &indexed, &sidecar)?;
         }
+        other => return Err(format!("unsupported prepared payload kind: {other:?}").into()),
     }
 
     Ok(())

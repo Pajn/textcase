@@ -2,7 +2,6 @@ use super::LanguageProfile;
 
 pub fn profile() -> LanguageProfile {
     LanguageProfile {
-        locale: "it",
         stop_words: &[
             "a", "da", "de", "del", "della", "di", "e", "il", "in", "la", "le", "lo",
         ],

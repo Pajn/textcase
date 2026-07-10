@@ -2,7 +2,6 @@ use super::LanguageProfile;
 
 pub fn profile() -> LanguageProfile {
     LanguageProfile {
-        locale: "fr",
         stop_words: &[
             "à", "au", "aux", "de", "des", "du", "et", "la", "le", "les", "ou",
         ],

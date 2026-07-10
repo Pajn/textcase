@@ -33,19 +33,13 @@ Every knob lives on `CaseOptions`; `convert` is the full-control entry point:
 ```rust
 use textcase::{CaseMode, CaseOptions, SubtitleSeparatorStyle, convert};
 
-let options = CaseOptions {
-    locale: "en",
-    mode: CaseMode::Title,
-    ..CaseOptions::default()
-};
+let mut options = CaseOptions::for_locale("en");
+options.mode = CaseMode::Title;
 assert_eq!(convert("the lord of the rings", &options), "The Lord of the Rings");
 
-let options = CaseOptions {
-    locale: "en",
-    mode: CaseMode::SentenceTitle,
-    subtitle_separator_style: SubtitleSeparatorStyle::ColonSpace,
-    ..CaseOptions::default()
-};
+let mut options = CaseOptions::for_locale("en");
+options.mode = CaseMode::SentenceTitle;
+options.subtitle_separator_style = SubtitleSeparatorStyle::ColonSpace;
 assert_eq!(
     convert("the rise of github - inside rust tooling", &options),
     "The rise of GitHub: Inside rust tooling"
@@ -111,11 +105,8 @@ Plugins restore canonical forms the input cannot express — proper nouns, brand
 use textcase::{CaseOptions, PluginSet, convert};
 
 let plugins = PluginSet::from_fst_path("data/plugins/geonames-de.tclx")?;
-let options = CaseOptions {
-    locale: "de",
-    lexicons: Some(&plugins),
-    ..CaseOptions::default()
-};
+let mut options = CaseOptions::for_locale("de");
+options.lexicons = Some(&plugins);
 println!("{}", convert("wir fliegen nach köln", &options));
 # Ok::<(), textcase::Error>(())
 ```

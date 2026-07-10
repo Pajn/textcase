@@ -9,7 +9,6 @@ pub fn always_capitalized(lower: &str) -> bool {
 
 pub fn profile() -> LanguageProfile {
     LanguageProfile {
-        locale: "en",
         stop_words: &[
             "a", "an", "and", "as", "at", "but", "by", "for", "in", "nor", "of", "on", "or", "per",
             "the", "to", "vs", "via",

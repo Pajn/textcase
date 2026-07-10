@@ -39,11 +39,8 @@ fn main() {
     map.insert("github".to_string(), 1);
     write_map(&path, &map, &sidecar).unwrap();
     let lexicons = PluginSet::from_fst_path(&path).unwrap();
-    let options = CaseOptions {
-        locale: "en",
-        lexicons: Some(&lexicons),
-        ..CaseOptions::default()
-    };
+    let mut options = CaseOptions::for_locale("en");
+    options.lexicons = Some(&lexicons);
     println!("{}", convert("github in berlin", &options));
     let _ = fs::remove_file(&path);
     let _ = fs::remove_file(path.with_file_name("demo-textcase.tclx.meta.json"));
