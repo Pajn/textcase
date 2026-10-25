@@ -1,20 +1,20 @@
 use super::{Token, TokenKind};
+use unicode_segmentation::UnicodeSegmentation;
 
 pub fn tokenize(input: &str) -> Vec<Token> {
-    // `char_indices` gives the byte offset of each char, so every token can
-    // record its range in the raw input; `end` tracks the byte just past the
-    // last char consumed for the current token.
-    let mut chars = input.char_indices().peekable();
+    // Grapheme indices keep combining marks attached to their base while still
+    // providing byte offsets into the original input.
+    let mut graphemes = input.grapheme_indices(true).peekable();
     let mut tokens = Vec::new();
 
-    while let Some((start, ch)) = chars.next() {
-        let mut end = start + ch.len_utf8();
+    while let Some((start, grapheme)) = graphemes.next() {
+        let mut end = start + grapheme.len();
 
-        if ch.is_whitespace() {
-            while let Some(&(index, next)) = chars.peek() {
-                if next.is_whitespace() {
-                    end = index + next.len_utf8();
-                    chars.next();
+        if grapheme.chars().all(char::is_whitespace) {
+            while let Some(&(index, next)) = graphemes.peek() {
+                if next.chars().all(char::is_whitespace) {
+                    end = index + next.len();
+                    graphemes.next();
                 } else {
                     break;
                 }
@@ -27,21 +27,21 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             continue;
         }
 
-        if is_word_start(ch) {
-            while let Some(&(index, next)) = chars.peek() {
-                if next.is_alphanumeric() {
-                    end = index + next.len_utf8();
-                    chars.next();
+        if is_word_grapheme(grapheme) {
+            while let Some(&(index, next)) = graphemes.peek() {
+                if is_word_grapheme(next) {
+                    end = index + next.len();
+                    graphemes.next();
                 } else if is_word_connector(next) {
                     // A connector (apostrophe or hyphen) stays inside the word
                     // only when a letter or digit follows it, so trailing quotes
                     // and dashes are emitted as punctuation instead of being
                     // glued onto the word.
-                    let mut lookahead = chars.clone();
+                    let mut lookahead = graphemes.clone();
                     lookahead.next();
-                    if lookahead.peek().is_some_and(|(_, c)| c.is_alphanumeric()) {
-                        end = index + next.len_utf8();
-                        chars.next();
+                    if lookahead.peek().is_some_and(|(_, following)| is_word_grapheme(following)) {
+                        end = index + next.len();
+                        graphemes.next();
                     } else {
                         break;
                     }
@@ -57,6 +57,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             continue;
         }
 
+        let ch = grapheme.chars().next().unwrap_or_default();
         let kind = if ch.is_ascii_punctuation()
             || matches!(
                 ch,
@@ -87,10 +88,13 @@ pub fn reconstruct(tokens: &[Token]) -> String {
     out
 }
 
-fn is_word_start(ch: char) -> bool {
-    ch.is_alphanumeric()
+fn is_word_grapheme(grapheme: &str) -> bool {
+    grapheme
+        .chars()
+        .next()
+        .is_some_and(char::is_alphanumeric)
 }
 
-fn is_word_connector(ch: char) -> bool {
-    matches!(ch, '\'' | '’' | '-' | '‐' | '‑')
+fn is_word_connector(grapheme: &str) -> bool {
+    matches!(grapheme, "'" | "’" | "-" | "‐" | "‑")
 }

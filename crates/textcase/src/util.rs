@@ -28,12 +28,18 @@ pub fn is_acronym_candidate(token: &str) -> bool {
 ///
 /// A leading capital followed only by lowercase (an ordinary title-cased word
 /// like `Quick`) is *not* mixed case, otherwise preserving mixed case would
-/// turn the converter into a no-op on already-capitalized input.
+/// turn the converter into a no-op on already-capitalized input. Hyphens start
+/// a new component, so a component-initial capital (as in `Real-Time`) is not
+/// an internal capital.
 pub fn is_mixed_case(token: &str) -> bool {
     let mut saw_lower = false;
     let mut saw_upper_after_first_alpha = false;
     let mut seen_alpha = false;
     for ch in token.chars() {
+        if matches!(ch, '-' | '\u{2010}' | '\u{2011}') {
+            seen_alpha = false;
+            continue;
+        }
         if ch.is_uppercase() {
             if seen_alpha {
                 saw_upper_after_first_alpha = true;

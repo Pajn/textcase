@@ -147,6 +147,18 @@ fn sentence_case_preserves_internal_capitals() {
         sentence_case("the iPhone and the McDonald empire", "en"),
         "The iPhone and the McDonald empire"
     );
+    assert_eq!(
+        sentence_case("in vivo Real-Time foo-BarBaz", "en"),
+        "In vivo real-time foo-BarBaz"
+    );
+}
+
+#[test]
+fn sentence_case_preserves_internal_capitals_after_combining_marks() {
+    assert_eq!(
+        sentence_case("she met an i\u{0301}Title", "en"),
+        "She met an i\u{0301}Title"
+    );
 }
 
 #[test]
